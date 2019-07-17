@@ -99,3 +99,10 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# Data & Outputs
+data/bair
+pretrained_models/*
+results_test_samples
+logs
+
