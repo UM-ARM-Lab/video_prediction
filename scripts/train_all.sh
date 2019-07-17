@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # BAIR action-free robot pushing dataset
 for model in \
   ours_deterministic_l1 \

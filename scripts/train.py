@@ -264,7 +264,7 @@ def main():
             run_start_time = time.time()
             results = sess.run(fetches)
             run_elapsed_time = time.time() - run_start_time
-            if run_elapsed_time > 1.5 and step > 0 and set(fetches.keys()) == {"global_step", "train_op"}:
+            if run_elapsed_time > 1.8 and step > 0 and set(fetches.keys()) == {"global_step", "train_op"}:
                 print('running train_op took too long (%0.1fs)' % run_elapsed_time)
 
             if (should(step, args.summary_freq) or
