@@ -105,4 +105,5 @@ data/bair
 pretrained_models/*
 results_test_samples
 logs
+*.tfrecord*
 
