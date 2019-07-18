@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+from __future__ import division, print_function
+
 import glob
 import os
 import random
@@ -209,7 +212,8 @@ class BaseVideoDataset(object):
                               ((sequence_length - 1) * (frame_skip + 1) + 1,
                                sequence_length, frame_skip))
             with tf.control_dependencies([tf.assert_greater_equal(num_shifts, 0,
-                    data=[example_sequence_length, num_shifts], message=assert_message)]):
+                                                                  data=[example_sequence_length, num_shifts],
+                                                                  message=assert_message)]):
                 t_start = tf.random_uniform([], 0, num_shifts + 1, dtype=tf.int32, seed=self.seed) * time_shift
         else:
             t_start = 0
@@ -238,6 +242,7 @@ class VideoDataset(BaseVideoDataset):
     multiple tf.train.Example and each of them is stored under a different
     feature name (which is indexed by the time step).
     """
+
     def __init__(self, *args, **kwargs):
         super(VideoDataset, self).__init__(*args, **kwargs)
         self._max_sequence_length = None
@@ -358,6 +363,7 @@ class SequenceExampleVideoDataset(BaseVideoDataset):
     This class supports reading tfrecords where an entire sequence is stored as
     a single tf.train.SequenceExample.
     """
+
     def parser(self, serialized_example):
         """
         Parses a single tf.train.SequenceExample into images, states, actions, etc tensors.
@@ -405,6 +411,7 @@ class VarLenFeatureVideoDataset(BaseVideoDataset):
 
     https://github.com/tensorflow/tensorflow/issues/15977
     """
+
     def filter(self, serialized_example):
         features = dict()
         features['sequence_length'] = tf.FixedLenFeature((), tf.int64)
@@ -456,29 +463,36 @@ class VarLenFeatureVideoDataset(BaseVideoDataset):
 if __name__ == '__main__':
     import cv2
     from video_prediction import datasets
+    import argparse
 
-    datasets = [
-        datasets.SV2PVideoDataset('data/shape', mode='val'),
-        datasets.SV2PVideoDataset('data/humans', mode='val'),
-        datasets.SoftmotionVideoDataset('data/bair', mode='val'),
-        datasets.KTHVideoDataset('data/kth', mode='val'),
-        datasets.KTHVideoDataset('data/kth_128', mode='val'),
-        datasets.UCF101VideoDataset('data/ucf101', mode='val'),
-    ]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('dataset')
+
+    args = parser.parse_args()
+
+    datasets = {
+        'shape': datasets.SV2PVideoDataset('data/shape', mode='val'),
+        'humans': datasets.SV2PVideoDataset('data/humans', mode='val'),
+        'bair': datasets.SoftmotionVideoDataset('data/bair', mode='val'),
+        'kth': datasets.KTHVideoDataset('data/kth', mode='val'),
+        'kth_128': datasets.KTHVideoDataset('data/kth_128', mode='val'),
+        'ucf101': datasets.UCF101VideoDataset('data/ucf101', mode='val'),
+        'moving_block': datasets.MovingBlockDataset("data/moving_block", mode='val'),
+    }
     batch_size = 4
 
     sess = tf.Session()
 
-    for dataset in datasets:
-        inputs = dataset.make_batch(batch_size)
-        images = inputs['images']
-        images = tf.reshape(images, [-1] + images.get_shape().as_list()[2:])
-        images = sess.run(images)
-        images = (images * 255).astype(np.uint8)
-        for image in images:
-            if image.shape[-1] == 1:
-                image = np.tile(image, [1, 1, 3])
-            else:
-                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            cv2.imshow(dataset.input_dir, image)
-            cv2.waitKey(50)
+    dataset = datasets[args.dataset]
+    inputs = dataset.make_batch(batch_size)
+    images = inputs['images']
+    images = tf.reshape(images, [-1] + images.get_shape().as_list()[2:])
+    images = sess.run(images)
+    images = (images * 255).astype(np.uint8)
+    for image in images:
+        if image.shape[-1] == 1:
+            image = np.tile(image, [1, 1, 3])
+        else:
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        cv2.imshow(dataset.input_dir, image)
+        cv2.waitKey(50)

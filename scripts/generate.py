@@ -38,7 +38,7 @@ def main():
     parser.add_argument("--model", type=str, help="model class name")
     parser.add_argument("--model_hparams", type=str, help="a string of comma separated list of model hyperparameters")
 
-    parser.add_argument("--batch_size", type=int, default=8, help="number of samples in batch")
+    parser.add_argument("--batch_size", type=int, default=1, help="number of samples in batch")
     parser.add_argument("--num_samples", type=int, help="number of samples in total (all of them by default)")
     parser.add_argument("--num_epochs", type=int, default=1)
 

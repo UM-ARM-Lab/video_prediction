@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -11,6 +12,8 @@ import time
 
 import numpy as np
 import tensorflow as tf
+
+tf.logging.set_verbosity(tf.logging.ERROR)
 
 from video_prediction import datasets, models
 
@@ -47,14 +50,19 @@ def main():
     parser.add_argument("--model_hparams", type=str, help="a string of comma separated list of model hyperparameters")
     parser.add_argument("--model_hparams_dict", type=str, help="a json file of model hyperparameters")
 
-    parser.add_argument("--summary_freq", type=int, default=1000, help="save frequency of summaries (except for image and eval summaries) for train/validation set")
-    parser.add_argument("--image_summary_freq", type=int, default=5000, help="save frequency of image summaries for train/validation set")
-    parser.add_argument("--eval_summary_freq", type=int, default=25000, help="save frequency of eval summaries for train/validation set")
-    parser.add_argument("--accum_eval_summary_freq", type=int, default=100000, help="save frequency of accumulated eval summaries for validation set only")
+    parser.add_argument("--summary_freq", type=int, default=1000,
+                        help="save frequency of summaries (except for image and eval summaries) for train/validation set")
+    parser.add_argument("--image_summary_freq", type=int, default=5000,
+                        help="save frequency of image summaries for train/validation set")
+    parser.add_argument("--eval_summary_freq", type=int, default=25000,
+                        help="save frequency of eval summaries for train/validation set")
+    parser.add_argument("--accum_eval_summary_freq", type=int, default=100000,
+                        help="save frequency of accumulated eval summaries for validation set only")
     parser.add_argument("--progress_freq", type=int, default=100, help="display progress every progress_freq steps")
     parser.add_argument("--save_freq", type=int, default=5000, help="save frequence of model, 0 to disable")
 
-    parser.add_argument("--aggregate_nccl", type=int, default=0, help="whether to use nccl or cpu for gradient aggregation in multi-gpu training")
+    parser.add_argument("--aggregate_nccl", type=int, default=0,
+                        help="whether to use nccl or cpu for gradient aggregation in multi-gpu training")
     parser.add_argument("--gpu_mem_frac", type=float, default=0, help="fraction of gpu memory to use")
     parser.add_argument("--seed", type=int)
 
@@ -215,9 +223,14 @@ def main():
     config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
     global_step = tf.train.get_or_create_global_step()
     max_steps = model.hparams.max_steps
+
     with tf.Session(config=config) as sess:
+        # from tensorflow.python import debug as tf_debug
+        # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+
         print("parameter_count =", sess.run(parameter_count))
 
+        summary_writer.add_graph(sess.graph)
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
         model.restore(sess, args.checkpoint)
