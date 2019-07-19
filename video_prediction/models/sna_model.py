@@ -162,6 +162,7 @@ class Prediction_Model(object):
         else:
             # Scheduled sampling:
             # Calculate number of ground-truth frames to pass in.
+            # Inverse sigmoid decay
             num_ground_truth = tf.to_int32(
                 tf.round(tf.to_float(batch_size) * (self.k / (self.k + tf.exp(self.iter_num / self.k)))))
             feedself = False
@@ -180,7 +181,6 @@ class Prediction_Model(object):
         lstm_state5, lstm_state6, lstm_state7 = None, None, None
 
         for t, action in enumerate(self.actions):
-            print(t)
             # Reuse variables after the first timestep.
             reuse = bool(self.gen_images)
 
@@ -656,7 +656,7 @@ class SNAVideoPredictionModel(VideoPredictionModel):
             batch_size=32,
             l1_weight=0.0,
             l2_weight=1.0,
-            ngf=16,
+            ngf=16,  # number of generator filters
             transformation='cdna',
             kernel_size=(5, 5),
             num_masks=10,

@@ -38,15 +38,15 @@ def main():
     parser.add_argument("--model", type=str, help="model class name")
     parser.add_argument("--model_hparams", type=str, help="a string of comma separated list of model hyperparameters")
 
-    parser.add_argument("--batch_size", type=int, default=1, help="number of samples in batch")
+    parser.add_argument("--batch_size", type=int, default=8, help="number of samples in batch")
     parser.add_argument("--num_samples", type=int, help="number of samples in total (all of them by default)")
     parser.add_argument("--num_epochs", type=int, default=1)
 
-    parser.add_argument("--num_stochastic_samples", type=int, default=5)
+    parser.add_argument("--num_stochastic_samples", type=int, default=4)
     parser.add_argument("--gif_length", type=int, help="default is sequence_length")
-    parser.add_argument("--fps", type=int, default=4)
+    parser.add_argument("--fps", type=int, default=10)
 
-    parser.add_argument("--gpu_mem_frac", type=float, default=0.05, help="fraction of gpu memory to use")
+    parser.add_argument("--gpu_mem_frac", type=float, default=0.10, help="fraction of gpu memory to use")
     parser.add_argument("--seed", type=int, default=7)
 
     args = parser.parse_args()
@@ -164,7 +164,11 @@ def main():
 
         feed_dict = {input_ph: input_results[name] for name, input_ph in input_phs.items()}
         for stochastic_sample_ind in range(args.num_stochastic_samples):
-            gen_images = sess.run(model.outputs['gen_images'], feed_dict=feed_dict)
+            fetches = [
+                model.outputs['gen_images'],
+                model.outputs['gen_states'],
+            ]
+            gen_images, gen_states = sess.run(fetches, feed_dict=feed_dict)
             # only keep the future frames
             gen_images = gen_images[:, -future_length:]
             for i, gen_images_ in enumerate(gen_images):
@@ -178,13 +182,16 @@ def main():
                 save_gif(os.path.join(args.output_gif_dir, gen_images_fname),
                          context_and_gen_images, fps=args.fps)
 
+                input_images_fname = 'input_image_%05d.gif' % (sample_ind + i)
+                save_gif(os.path.join(args.output_gif_dir, input_images_fname), context_images_, fps=args.fps)
+
                 gen_image_fname_pattern = 'gen_image_%%05d_%%02d_%%0%dd.png' % max(2, len(str(len(gen_images_) - 1)))
                 for t, gen_image in enumerate(gen_images_):
                     gen_image_fname = gen_image_fname_pattern % (sample_ind + i, stochastic_sample_ind, t)
                     if gen_image.shape[-1] == 1:
-                      gen_image = np.tile(gen_image, (1, 1, 3))
+                        gen_image = np.tile(gen_image, (1, 1, 3))
                     else:
-                      gen_image = cv2.cvtColor(gen_image, cv2.COLOR_RGB2BGR)
+                        gen_image = cv2.cvtColor(gen_image, cv2.COLOR_RGB2BGR)
                     cv2.imwrite(os.path.join(args.output_png_dir, gen_image_fname), gen_image)
 
         sample_ind += args.batch_size
