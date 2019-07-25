@@ -390,7 +390,6 @@ class Prediction_Model(object):
 
                 if '1stimg_bckgd' in self.conf:
                     background = self.images[0]
-                    print('using background from first image..')
                 else: background = prev_image
                 output, mask_list = self.fuse_trafos(enc6, background,
                                                      transformed_l,

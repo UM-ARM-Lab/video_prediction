@@ -8,6 +8,7 @@ from .kth_dataset import KTHVideoDataset
 #from .cartgripper_dataset import CartgripperVideoDataset
 from .moving_block_dataset import MovingBlockDataset
 from .unity_cloth_dataset import UnityClothDataset
+from .gazebo_link_bot_dataset import GazeboLinkBotDataset
 
 
 def get_dataset_class(dataset):
@@ -21,6 +22,7 @@ def get_dataset_class(dataset):
         'cartgripper': 'CartgripperVideoDataset',
         'moving_block': 'MovingBlockDataset',
         'unity_cloth': 'UnityClothDataset',
+        'link_bot': 'GazeboLinkBotDataset',
     }
     dataset_class = dataset_mappings.get(dataset, dataset)
     dataset_class = globals().get(dataset_class)
