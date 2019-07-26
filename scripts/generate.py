@@ -18,6 +18,8 @@ from video_prediction.utils.ffmpeg_gif import save_gif
 
 
 def main():
+    np.set_printoptions(threshold=64*64*3, linewidth=250)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir", type=str, required=True, help="either a directory containing subdirectories "
                                                                      "train, val, test, etc, or a directory containing "
