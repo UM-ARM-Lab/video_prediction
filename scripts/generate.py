@@ -9,7 +9,7 @@ import json
 import os
 import random
 
-import cv2
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
@@ -18,7 +18,7 @@ from video_prediction.utils.ffmpeg_gif import save_gif
 
 
 def main():
-    np.set_printoptions(threshold=64*64*3, linewidth=250)
+    np.set_printoptions(threshold=64 * 64 * 3, linewidth=250)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir", type=str, required=True, help="either a directory containing subdirectories "
@@ -190,11 +190,7 @@ def main():
                 gen_image_fname_pattern = 'gen_image_%%05d_%%02d_%%0%dd.png' % max(2, len(str(len(gen_images_) - 1)))
                 for t, gen_image in enumerate(gen_images_):
                     gen_image_fname = gen_image_fname_pattern % (sample_ind + i, stochastic_sample_ind, t)
-                    if gen_image.shape[-1] == 1:
-                        gen_image = np.tile(gen_image, (1, 1, 3))
-                    else:
-                        gen_image = cv2.cvtColor(gen_image, cv2.COLOR_RGB2BGR)
-                    cv2.imwrite(os.path.join(args.output_png_dir, gen_image_fname), gen_image)
+                    plt.imsave(os.path.join(args.output_png_dir, gen_image_fname), gen_image)
 
         sample_ind += args.batch_size
 
