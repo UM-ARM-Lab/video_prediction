@@ -5,11 +5,15 @@ from __future__ import print_function
 
 import argparse
 import random
+import warnings
 from collections import OrderedDict
 
 import matplotlib.pyplot as plt
 import numpy as np
-import tensorflow as tf
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    import tensorflow as tf
 
 from video_prediction import load_data
 from video_prediction.model import visualize, build_model, build_placeholders

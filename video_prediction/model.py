@@ -25,6 +25,7 @@ class VisualPredictionModel:
         if image_dim is None:
             image_dim = [64, 64, 3]
         self.image_dim = image_dim
+        self.h, self.w, _ = self.image_dim
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.checkpoint = checkpoint
@@ -34,9 +35,7 @@ class VisualPredictionModel:
         self.placeholders = build_placeholders(self.total_length, state_dim, action_dim, image_dim)
         self.model = build_model(checkpoint, 'sna', None, context_length, self.placeholders, self.total_length)
 
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
-        config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
-        self.sess = tf.Session(config=config)
+        self.sess = tf.Session()
         self.sess.graph.as_default()
 
         self.model.restore(self.sess, self.checkpoint)
@@ -50,7 +49,7 @@ class VisualPredictionModel:
         """
         padded_context_states = np.zeros([1, self.total_length, self.state_dim], np.float32)
         nop_images = np.zeros([1, self.total_length, *self.image_dim], np.float32)
-        padded_context_pixel_images = np.zeros([1, self.total_length, *self.image_dim], np.float32)
+        padded_context_pixel_images = np.zeros([1, self.total_length, self.h, self.w, 1], np.float32)
         padded_actions = np.zeros([1, self.total_length, self.action_dim], np.float32)
         padded_context_states[0, : self.context_length] = context_states
         padded_context_pixel_images[0, : self.context_length] = context_pixel_images
@@ -83,7 +82,7 @@ class VisualPredictionModel:
         """
         padded_context_states = np.zeros([1, self.total_length, self.state_dim], np.float32)
         padded_context_images = np.zeros([1, self.total_length, *self.image_dim], np.float32)
-        nop_pixel_images = np.zeros([1, self.total_length, *self.image_dim], np.float32)
+        nop_pixel_images = np.zeros([1, self.total_length, self.h, self.w, 1], np.float32)
         padded_actions = np.zeros([1, self.total_length, self.action_dim], np.float32)
         padded_context_states[0, : self.context_length] = context_states
         padded_context_images[0, : self.context_length] = context_images
@@ -112,10 +111,11 @@ def build_placeholders(total_length, state_dim, action_dim, image_dim):
     # all arrays must be the length of the entire prediction, but only the first context_length will be used
     # we also don't fill the last action because it is not used.
     # Ths way the last action given is actually used to make the final prediction
+    h, w, d = image_dim
     placeholders = {
         'states': tf.placeholder(tf.float32, [1, total_length, state_dim]),
         'images': tf.placeholder(tf.float32, [1, total_length, *image_dim]),
-        'pix_distribs': tf.placeholder(tf.float32, [1, total_length, *image_dim]),
+        'pix_distribs': tf.placeholder(tf.float32, [1, total_length, h, w, 1]),
         'actions': tf.placeholder(tf.float32, [1, total_length, action_dim]),
     }
     return placeholders
