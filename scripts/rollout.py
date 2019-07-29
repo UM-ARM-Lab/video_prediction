@@ -51,7 +51,9 @@ def main():
     total_length = context_length + future_length
     inputs_placeholders = build_placeholders(total_length, state_dim, action_dim, image_dim)
 
-    model = build_model(args.checkpoint, args.model, args.model_hparams, context_length, inputs_placeholders, total_length)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        model = build_model(args.checkpoint, args.model, args.model_hparams, context_length, inputs_placeholders, total_length)
 
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
     config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)

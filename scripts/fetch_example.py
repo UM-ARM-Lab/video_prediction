@@ -19,8 +19,8 @@ def main():
     parser.add_argument('input_dir')
     parser.add_argument('dataset')
     parser.add_argument('dataset_hparams_dict')
-    parser.add_argument('--traj_idx', type=int, default=0)
-    parser.add_argument('--time_idx', type=int, default=0)
+    parser.add_argument('--traj-idx', type=int, default=0)
+    parser.add_argument('--time-idx', type=int, default=0)
     parser.add_argument('--outdir')
 
     np.random.seed(0)
@@ -39,7 +39,7 @@ def main():
     VideoDataset = datasets.get_dataset_class(args.dataset)
     with open(args.dataset_hparams_dict, 'r') as hparams_f:
         hparams_dict = json.loads(hparams_f.read())
-    dataset = VideoDataset(args.input_dir, mode="train", seed=0, num_epochs=1, hparams_dict=hparams_dict)
+    dataset = VideoDataset(args.input_dir, mode="test", seed=0, num_epochs=1, hparams_dict=hparams_dict)
 
     inputs = dataset.make_batch(1, shuffle=False)
     outputs = None

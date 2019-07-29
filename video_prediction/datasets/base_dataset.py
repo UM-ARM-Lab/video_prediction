@@ -131,9 +131,10 @@ class BaseVideoDataset(object):
 
     def make_dataset(self, batch_size, shuffle=True):
         filenames = self.filenames
-        shuffle = (self.mode == 'train') or (self.mode == 'val' and self.hparams.shuffle_on_val) or (shuffle)
         if shuffle:
-            random.shuffle(filenames)
+            shuffle = (self.mode == 'train') or (self.mode == 'val' and self.hparams.shuffle_on_val)
+            if shuffle:
+                random.shuffle(filenames)
 
         dataset = tf.data.TFRecordDataset(filenames, buffer_size=8 * 1024 * 1024)
         dataset = dataset.filter(self.filter)

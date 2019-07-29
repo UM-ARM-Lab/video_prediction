@@ -169,9 +169,9 @@ def visualize(results, context_length, args):
     # Plot trajectory in states space
     # FIXME: this assumes 2d state
     plt.scatter(context_states[:, 0], context_states[:, 1], label='context_states', c='b')
-    # plt.plot(context_states, c='b')
     plt.scatter(gen_states[:, 0], gen_states[:, 1], label='gen_states', c='r')
-    # plt.plot(gen_states, c='r')
+    states_path = np.concatenate((context_states, gen_states))
+    plt.plot(states_path[:, 0], states_path[:, 1], c='r')
     plt.legend()
     plt.axis("equal")
 
