@@ -1,10 +1,11 @@
 from __future__ import absolute_import, division, print_function
-from typing import List
 
 import errno
 import json
 import os
+import warnings
 from collections import OrderedDict
+from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,9 +34,14 @@ class VisualPredictionModel:
         self.prediction_length = future_length
         self.total_length = context_length + future_length
         self.placeholders = build_placeholders(self.total_length, state_dim, action_dim, image_dim)
-        self.model = build_model(checkpoint, 'sna', None, context_length, self.placeholders, self.total_length)
 
-        self.sess = tf.Session()
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            self.model = build_model(checkpoint, 'sna', None, context_length, self.placeholders, self.total_length)
+
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
+        config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
+        self.sess = tf.Session(config=config)
         self.sess.graph.as_default()
 
         self.model.restore(self.sess, self.checkpoint)
