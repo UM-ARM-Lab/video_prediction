@@ -1,15 +1,17 @@
+#!/usr/bin/env python
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import re
 import argparse
 import csv
 import errno
 import json
 import os
 import random
+import re
 
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
@@ -17,18 +19,13 @@ from video_prediction import datasets, models
 
 
 def save_image_sequence(prefix_fname, images, time_start_ind=0):
-    import cv2
     head, tail = os.path.split(prefix_fname)
     if head and not os.path.exists(head):
         os.makedirs(head)
     for t, image in enumerate(images):
         image_fname = '%s_%02d.png' % (prefix_fname, time_start_ind + t)
         image = (image * 255.0).astype(np.uint8)
-        if image.shape[-1] == 1:
-            image = np.tile(image, (1, 1, 3))
-        else:
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        cv2.imwrite(image_fname, image)
+        plt.imsave(image_fname, image)
 
 
 def save_image_sequences(prefix_fname, images, sample_start_ind=0, time_start_ind=0):
@@ -160,7 +157,8 @@ def main():
     parser.add_argument("--num_samples", type=int, help="number of samples in total (all of them by default)")
     parser.add_argument("--num_epochs", type=int, default=1)
 
-    parser.add_argument("--eval_substasks", type=str, nargs='+', default=['max', 'avg', 'min'], help='subtasks to evaluate (e.g. max, avg, min)')
+    parser.add_argument("--eval_substasks", type=str, nargs='+', default=['max', 'avg', 'min'],
+                        help='subtasks to evaluate (e.g. max, avg, min)')
     parser.add_argument("--only_metrics", action='store_true')
     parser.add_argument("--num_stochastic_samples", type=int, default=100)
 

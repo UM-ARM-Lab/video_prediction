@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function
+from typing import List
 
 import errno
 import json
@@ -15,14 +16,22 @@ from video_prediction.utils.ffmpeg_gif import save_gif
 
 class VisualPredictionModel:
 
-    def __init__(self, checkpoint, future_length, context_length=2, state_dim=2, action_dim=2, image_dim=None):
+    def __init__(self, checkpoint: str,
+                 future_length: int,
+                 context_length: int = 2,
+                 state_dim: int = 2,
+                 action_dim: int = 2,
+                 image_dim: List[int] = None):
         if image_dim is None:
             image_dim = [64, 64, 3]
+        self.image_dim = image_dim
+        self.action_dim = action_dim
+        self.state_dim = state_dim
         self.checkpoint = checkpoint
         self.context_length = context_length
         self.prediction_length = future_length
         self.total_length = context_length + future_length
-        self.placeholders, self.inputs_op = build_iterators(context_length, future_length, state_dim, action_dim, image_dim)
+        self.placeholders = build_placeholders(self.total_length, state_dim, action_dim, image_dim)
         self.model = build_model(checkpoint, 'sna', None, context_length, self.placeholders, self.total_length)
 
         gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
@@ -32,29 +41,71 @@ class VisualPredictionModel:
 
         self.model.restore(self.sess, self.checkpoint)
 
-    def rollout(self, context_states, context_images, actions):
+    def rollout_pixel_distributions(self, context_pixel_images, context_states, actions):
         """
         Convert the data needed to make a prediction into a TensorFlow Dataset Iterator
+        :param context_pixel_images: a numpy array [context_length, width, height, channels]
         :param context_states: a numpy array [context_length, state_dimension]
-        :param context_images: a numpy array [context_length, width, height, channels]
         :param actions: a numpy array [future_length, action_dimension]
-        :return: dictionary for feeding, iterator, and total_length
         """
-        # inputs_placeholders, inputs_op, total_length = build_dataset(context_states, context_images, actions)
-        input_results = self.sess.run(self.inputs_op)
+        padded_context_states = np.zeros([1, self.total_length, self.state_dim], np.float32)
+        nop_images = np.zeros([1, self.total_length, *self.image_dim], np.float32)
+        padded_context_pixel_images = np.zeros([1, self.total_length, *self.image_dim], np.float32)
+        padded_actions = np.zeros([1, self.total_length, self.action_dim], np.float32)
+        padded_context_states[0, : self.context_length] = context_states
+        padded_context_pixel_images[0, : self.context_length] = context_pixel_images
+        padded_actions[0, self.context_length - 1: -1] = actions
 
-        feed_dict = {input_ph: input_results[name] for name, input_ph in self.placeholders.items()}
-        feed_dict['states'][0, :self.context_length] = context_states
-        feed_dict['images'][0, :self.context_length] = context_images
-        feed_dict['actions'][0, self.context_length - 1:-1] = actions
+        feed_dict = {
+            self.placeholders['states']: padded_context_states,
+            self.placeholders['images']: nop_images,
+            self.placeholders['pix_distribs']: padded_context_pixel_images,
+            self.placeholders['actions']: padded_actions,
+        }
         fetches = OrderedDict({
-            'images': self.model.outputs['gen_images'],
-            'states': self.model.outputs['gen_states'],
+            'gen_pix_distribs': self.model.outputs['gen_pix_distribs'],
+            'gen_states': self.model.outputs['gen_states'],
         })
         results = self.sess.run(fetches, feed_dict=feed_dict)
 
-        gen_images = (results['images'][0, self.context_length:] * 255.0).astype(np.uint8)
-        gen_states = results['states'][0, self.context_length:]
+        # 0 indexes the batch, which is always of size 1
+        # time indexing here means that we include the last context image only
+        gen_states = np.concatenate((context_states[[1]], results['gen_states'][0, self.context_length:]))
+        gen_images = np.concatenate((context_pixel_images[[1]], results['gen_pix_distribs'][0, self.context_length:]))
+        return gen_images, gen_states
+
+    def rollout(self, context_images, context_states, actions):
+        """
+        Convert the data needed to make a prediction into a TensorFlow Dataset Iterator
+        :param context_images: a numpy array [context_length, width, height, channels]
+        :param context_states: a numpy array [context_length, state_dimension]
+        :param actions: a numpy array [future_length, action_dimension]
+        """
+        padded_context_states = np.zeros([1, self.total_length, self.state_dim], np.float32)
+        padded_context_images = np.zeros([1, self.total_length, *self.image_dim], np.float32)
+        nop_pixel_images = np.zeros([1, self.total_length, *self.image_dim], np.float32)
+        padded_actions = np.zeros([1, self.total_length, self.action_dim], np.float32)
+        padded_context_states[0, : self.context_length] = context_states
+        padded_context_images[0, : self.context_length] = context_images
+        padded_actions[0, self.context_length - 1: -1] = actions
+
+        feed_dict = {
+            self.placeholders['states']: padded_context_states,
+            self.placeholders['images']: padded_context_images,
+            self.placeholders['pix_distribs']: nop_pixel_images,
+            self.placeholders['actions']: padded_actions,
+        }
+        fetches = OrderedDict({
+            'gen_images': self.model.outputs['gen_images'],
+            'gen_states': self.model.outputs['gen_states'],
+        })
+        results = self.sess.run(fetches, feed_dict=feed_dict)
+
+        # 0 indexes the batch, which is always of size 1
+        # time indexing here means that we include the last context image only
+        gen_states = np.concatenate((context_states[[1]], results['gen_states'][0, self.context_length:]))
+        gen_images = np.concatenate((context_images[[1]], results['gen_images'][0, self.context_length:]))
+        return gen_images, gen_states
 
 
 def build_placeholders(total_length, state_dim, action_dim, image_dim):
@@ -64,6 +115,7 @@ def build_placeholders(total_length, state_dim, action_dim, image_dim):
     placeholders = {
         'states': tf.placeholder(tf.float32, [1, total_length, state_dim]),
         'images': tf.placeholder(tf.float32, [1, total_length, *image_dim]),
+        'pix_distribs': tf.placeholder(tf.float32, [1, total_length, *image_dim]),
         'actions': tf.placeholder(tf.float32, [1, total_length, action_dim]),
     }
     return placeholders

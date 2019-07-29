@@ -4,4 +4,5 @@ scipy
 scikit-image
 h5py
 gitpython
+pillow
 git+git://github.com/alexlee-gk/lpips-tensorflow.git#egg=lpips-tf

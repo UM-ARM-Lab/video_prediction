@@ -10,8 +10,8 @@ from collections import OrderedDict
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from PIL import Image
 
+from video_prediction import load_data
 from video_prediction.model import visualize, build_model, build_placeholders
 
 
@@ -68,7 +68,7 @@ def main():
         inputs_placeholders['images']: padded_context_images,
         inputs_placeholders['actions']: padded_actions,
     }
-    print(model.inputs.keys())
+
     fetches = OrderedDict({
         'gen_images': model.outputs['gen_images'],
         'gen_states': model.outputs['gen_states'],
@@ -79,19 +79,6 @@ def main():
 
     visualize(results, context_length, args)
     plt.show()
-
-
-def load_data(context_image_filenames, context_states_filename, actions_filename):
-    actions = np.genfromtxt(actions_filename, delimiter=',', dtype=np.float32)
-    context_states = np.genfromtxt(context_states_filename, delimiter=',', dtype=np.float32)
-    context_images = []
-    for time_step_idx, context_image_filename in enumerate(context_image_filenames):
-        rgba_image_uint8 = np.array(Image.open(context_image_filename), dtype=np.uint8)
-        rgb_image_float = rgba_image_uint8[:, :, :3].astype(np.float32) / 255.0
-        context_images.append(rgb_image_float)
-    context_images = np.array(context_images)
-
-    return context_states, context_images, actions
 
 
 if __name__ == '__main__':

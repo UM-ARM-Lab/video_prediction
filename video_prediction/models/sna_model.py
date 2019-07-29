@@ -321,7 +321,6 @@ class Prediction_Model(object):
 
 
                     extra_masks = 1  ## extra_masks = 2 is needed for running singleview_shifted!!
-                    # print('using extra masks 2 because of single view shifted!!')
                     # extra_masks = 2
 
                 if self.conf['model'] == 'CDNA':
@@ -458,7 +457,6 @@ class Prediction_Model(object):
             background_pix = pix_distributions[0]
             if len(background_pix.get_shape()) == 3:
                 background_pix = tf.expand_dims(background_pix, -1)
-            print('using pix_distrib-background from first image..')
         else:
             background_pix = prev_pix_distrib
         pix_distrib_output = mask_list[0] * background_pix

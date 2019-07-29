@@ -105,13 +105,14 @@ def print_loss_info(losses, *tensors):
 def with_flat_batch(flat_batch_fn, ndims=4):
     def fn(x, *args, **kwargs):
         shape = tf.shape(x)
-        flat_batch_shape = tf.concat([[-1], shape[-(ndims-1):]], axis=0)
+        flat_batch_shape = tf.concat([[-1], shape[-(ndims - 1):]], axis=0)
         flat_batch_shape.set_shape([ndims])
         flat_batch_x = tf.reshape(x, flat_batch_shape)
         flat_batch_r = flat_batch_fn(flat_batch_x, *args, **kwargs)
-        r = nest.map_structure(lambda x: tf.reshape(x, tf.concat([shape[:-(ndims-1)], tf.shape(x)[1:]], axis=0)),
+        r = nest.map_structure(lambda x: tf.reshape(x, tf.concat([shape[:-(ndims - 1)], tf.shape(x)[1:]], axis=0)),
                                flat_batch_r)
         return r
+
     return fn
 
 
@@ -190,7 +191,7 @@ def tensor_to_clip(tensor):
 def tensor_to_image_batch(tensor):
     if tensor.shape.ndims == 6:
         # concatenate last dimension vertically
-        tensor= tf.concat(tf.unstack(tensor, axis=-1), axis=-3)
+        tensor = tf.concat(tf.unstack(tensor, axis=-1), axis=-3)
     if tensor.shape.ndims == 5:
         # concatenate time dimension horizontally
         tensor = tf.concat(tf.unstack(tensor, axis=1), axis=2)
@@ -525,7 +526,8 @@ def reduce_tensors(structures, shallow=False):
     return reduced_structure
 
 
-def get_checkpoint_restore_saver(checkpoint, var_list=None, skip_global_step=False, restore_to_checkpoint_mapping=None):
+def get_checkpoint_restore_saver(checkpoint, var_list=None, skip_global_step=False, restore_to_checkpoint_mapping=None,
+                                 verbose=False):
     if os.path.isdir(checkpoint):
         # latest_checkpoint doesn't work when the path has special characters
         checkpoint = tf.train.latest_checkpoint(checkpoint)
@@ -546,16 +548,17 @@ def get_checkpoint_restore_saver(checkpoint, var_list=None, skip_global_step=Fal
     checkpoint_not_in_restore_var_names = [name for name in checkpoint_var_names if name not in restore_vars]
     if skip_global_step and 'global_step' in checkpoint_not_in_restore_var_names:
         checkpoint_not_in_restore_var_names.remove('global_step')
-    if restore_not_in_checkpoint_vars:
-        print("global variables that were not restored because they are "
-              "not in the checkpoint:")
-        for name, _ in sorted(restore_not_in_checkpoint_vars.items()):
-            print("    ", name)
-    if checkpoint_not_in_restore_var_names:
-        print("checkpoint variables that were not used for restoring "
-              "because they are not in the graph:")
-        for name in sorted(checkpoint_not_in_restore_var_names):
-            print("    ", name)
+    if verbose:
+        if restore_not_in_checkpoint_vars:
+            print("global variables that were not restored because they are "
+                  "not in the checkpoint:")
+            for name, _ in sorted(restore_not_in_checkpoint_vars.items()):
+                print("    ", name)
+        if checkpoint_not_in_restore_var_names:
+            print("checkpoint variables that were not used for restoring "
+                  "because they are not in the graph:")
+            for name in sorted(checkpoint_not_in_restore_var_names):
+                print("    ", name)
     return restore_saver, checkpoint
 
 
