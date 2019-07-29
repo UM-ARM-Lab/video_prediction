@@ -9,7 +9,9 @@ import json
 import os
 import random
 import time
+from datetime import datetime
 
+import git
 import numpy as np
 import tensorflow as tf
 
@@ -75,6 +77,9 @@ def main():
 
     if args.output_dir is None:
         list_depth = 0
+        repo = git.Repo(search_parent_directories=True)
+        sha = repo.head.object.hexsha[:10]
+        stamp = "{:%B_%d_%H-%M-%S}".format(datetime.now())
         model_fname = ''
         for t in ('model=%s,%s' % (args.model, args.model_hparams)):
             if t == '[':
@@ -88,6 +93,7 @@ def main():
             if t in '[]':
                 t = ''
             model_fname += t
+        model_fname += '_{}_{}'.format(stamp, sha)
         args.output_dir = os.path.join(args.logs_dir, model_fname) + args.output_dir_postfix
 
     if args.resume:
