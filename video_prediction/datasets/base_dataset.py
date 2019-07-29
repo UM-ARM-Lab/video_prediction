@@ -129,9 +129,9 @@ class BaseVideoDataset(object):
         """
         raise NotImplementedError
 
-    def make_dataset(self, batch_size):
+    def make_dataset(self, batch_size, shuffle=True):
         filenames = self.filenames
-        shuffle = self.mode == 'train' or (self.mode == 'val' and self.hparams.shuffle_on_val)
+        shuffle = (self.mode == 'train') or (self.mode == 'val' and self.hparams.shuffle_on_val) or (shuffle)
         if shuffle:
             random.shuffle(filenames)
 
@@ -153,8 +153,8 @@ class BaseVideoDataset(object):
         dataset = dataset.prefetch(batch_size)
         return dataset
 
-    def make_batch(self, batch_size):
-        dataset = self.make_dataset(batch_size)
+    def make_batch(self, batch_size, shuffle=True):
+        dataset = self.make_dataset(batch_size, shuffle)
         iterator = dataset.make_one_shot_iterator()
         return iterator.get_next()
 
