@@ -231,9 +231,6 @@ def main():
     max_steps = model.hparams.max_steps
 
     with tf.Session(config=config) as sess:
-        # from tensorflow.python import debug as tf_debug
-        # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
-
         print("parameter_count =", sess.run(parameter_count))
 
         summary_writer.add_graph(sess.graph)

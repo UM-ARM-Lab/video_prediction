@@ -35,6 +35,7 @@ class GazeboLinkBotDataset(VideoDataset):
         self.state_like_names_and_shapes['images'] = '%%d/%s/encoded' % image_name, None
         if self.hparams.use_state:
             self.state_like_names_and_shapes['states'] = '%d/endeffector_pos', (2,)
+            self.state_like_names_and_shapes['constraints'] = '%d/constraint', (1,)
             self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
         self._check_or_infer_shapes()
 
@@ -45,6 +46,7 @@ class GazeboLinkBotDataset(VideoDataset):
             sequence_length=12,
             long_sequence_length=30,
             time_shift=2,
+            free_space_only=False,
         )
         return dict(itertools.chain(default_hparams.items(), hparams.items()))
 
