@@ -229,28 +229,29 @@ class BaseVideoDataset(object):
         def choose_random_valid_start_index(constraints_seq):
             mask = make_mask(example_sequence_length, sequence_length)
             valid_start_onehot = constraints_seq * mask
-            valid_start_indeces = np.argwhere(valid_start_onehot)
+            valid_start_indeces = np.argwhere(valid_start_onehot == 0).squeeze()
             return np.random.choice(valid_start_indeces, size=1)
 
-        t_start = tf.py_function(choose_random_valid_start_index,
-                                 [state_like_seqs['constraints']],
-                                 tf.int32, name='choose_valid_start_t')
-
-        # if (time_shift and self.mode == 'train') or self.hparams.force_time_shift:
-        #     assert time_shift > 0 and isinstance(time_shift, int)
-        #     if isinstance(example_sequence_length, tf.Tensor):
-        #         example_sequence_length = tf.cast(example_sequence_length, tf.int32)
-        #     num_shifts = ((example_sequence_length - 1) - (sequence_length - 1) * (frame_skip + 1)) // time_shift
-        #     assert_message = ('example_sequence_length has to be at least %d when '
-        #                       'sequence_length=%d, frame_skip=%d.' %
-        #                       ((sequence_length - 1) * (frame_skip + 1) + 1,
-        #                        sequence_length, frame_skip))
-        #     with tf.control_dependencies([tf.assert_greater_equal(num_shifts, 0,
-        #                                                           data=[example_sequence_length, num_shifts],
-        #                                                           message=assert_message)]):
-        #         t_start = tf.random_uniform([], 0, num_shifts + 1, dtype=tf.int32, seed=self.seed) * time_shift
-        # else:
-        #     t_start = 0
+        if self.hparams.free_space_only:
+            t_start = tf.py_function(choose_random_valid_start_index,
+                                     [state_like_seqs['constraints']],
+                                     tf.int32, name='choose_valid_start_t')
+        else:
+            if (time_shift and self.mode == 'train') or self.hparams.force_time_shift:
+                assert time_shift > 0 and isinstance(time_shift, int)
+                if isinstance(example_sequence_length, tf.Tensor):
+                    example_sequence_length = tf.cast(example_sequence_length, tf.int32)
+                num_shifts = ((example_sequence_length - 1) - (sequence_length - 1) * (frame_skip + 1)) // time_shift
+                assert_message = ('example_sequence_length has to be at least %d when '
+                                  'sequence_length=%d, frame_skip=%d.' %
+                                  ((sequence_length - 1) * (frame_skip + 1) + 1,
+                                   sequence_length, frame_skip))
+                with tf.control_dependencies([tf.assert_greater_equal(num_shifts, 0,
+                                                                      data=[example_sequence_length, num_shifts],
+                                                                      message=assert_message)]):
+                    t_start = tf.random_uniform([], 0, num_shifts + 1, dtype=tf.int32, seed=self.seed) * time_shift
+            else:
+                t_start = 0
 
         state_like_t_slice = slice(t_start, t_start + (sequence_length - 1) * (frame_skip + 1) + 1, frame_skip + 1)
         action_like_t_slice = slice(t_start, t_start + (sequence_length - 1) * (frame_skip + 1))

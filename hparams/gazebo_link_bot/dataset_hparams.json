@@ -6,5 +6,6 @@
     "scale_size": 0,
     "sequence_length": 12,
     "time_shift": 2,
-    "use_state": true
+    "use_state": true,
+    "free_space_only": true
 }
