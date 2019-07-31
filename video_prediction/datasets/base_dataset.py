@@ -233,7 +233,7 @@ class BaseVideoDataset(object):
             return np.random.choice(valid_start_indeces, size=1)
 
         if self.hparams.free_space_only:
-            t_start = tf.py_function(choose_random_valid_start_index,
+            t_start = tf.py_func(choose_random_valid_start_index,
                                      [state_like_seqs['constraints']],
                                      tf.int32, name='choose_valid_start_t')
         else:
