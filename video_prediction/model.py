@@ -18,8 +18,8 @@ from video_prediction.utils.ffmpeg_gif import save_gif
 class VisualPredictionModel:
 
     def __init__(self, checkpoint: str,
+                 context_length: int,
                  future_length: int,
-                 context_length: int = 2,
                  state_dim: int = 2,
                  action_dim: int = 2,
                  image_dim: List[int] = None):

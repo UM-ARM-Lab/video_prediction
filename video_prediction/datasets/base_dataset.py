@@ -137,6 +137,7 @@ class BaseVideoDataset(object):
                 random.shuffle(filenames)
 
         dataset = tf.data.TFRecordDataset(filenames, buffer_size=8 * 1024 * 1024)
+        # filter to keep only examples which are as long as the requested sequence_length
         dataset = dataset.filter(self.filter)
         if shuffle:
             dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=1024, count=self.num_epochs))
