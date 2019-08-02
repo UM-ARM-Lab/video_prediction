@@ -156,13 +156,40 @@ class BaseVideoDataset(object):
 
         def _parser(serialized_example):
             state_like_seqs, action_like_seqs = self.parser(serialized_example)
-            seqs = OrderedDict(list(state_like_seqs.items()) + list(action_like_seqs.items()))
-            return seqs
+            return state_like_seqs, action_like_seqs
 
-        num_parallel_calls = None if shuffle else 1  # for reproducibility (e.g. sampled subclips from the test set)
-        dataset = dataset.apply(tf.contrib.data.map_and_batch(
-            _parser, batch_size, drop_remainder=True, num_parallel_calls=num_parallel_calls))
-        dataset = dataset.prefetch(batch_size)
+        def has_valid_index(constraints_seq):
+            mask = make_mask(self._max_sequence_length, self.hparams.sequence_length)
+            valid_start_onehot = constraints_seq * mask
+            valid_start_indeces = np.argwhere(valid_start_onehot == 0).squeeze()
+            # Handle the case where there is no such sequence
+            return valid_start_indeces.size > 0
+
+        def _filter_free_space_only(state_like_seqs, action_like_seqs):
+            del action_like_seqs
+            if self.hparams.free_space_only:
+                is_valid = tf.py_func(has_valid_index,
+                                      [state_like_seqs['constraints']],
+                                      tf.bool, name='choose_valid_start_t')
+                return is_valid
+            else:
+                return True
+
+        def _flatten(state_like_sliced_seqs, action_like_sliced_seqs):
+            flat_input_dict = state_like_sliced_seqs
+            flat_input_dict.update(action_like_sliced_seqs)
+            return flat_input_dict
+
+        def _slice_sequences(state_like_seqs, action_like_seqs):
+            example_sequence_length = self._max_sequence_length
+            return self.slice_sequences(state_like_seqs, action_like_seqs, example_sequence_length)
+
+        parsed_dataset = dataset.map(_parser)
+        filtered_dataset = parsed_dataset.filter(_filter_free_space_only)
+        sliced_dataset = filtered_dataset.map(_slice_sequences)
+        flattened_dataset = sliced_dataset.map(_flatten)
+        batched_dataset = flattened_dataset.batch(batch_size, drop_remainder=True)
+        dataset = batched_dataset.prefetch(batch_size)
         return dataset
 
     def make_batch(self, batch_size, shuffle=True):
@@ -204,38 +231,43 @@ class BaseVideoDataset(object):
         images = tf.image.convert_image_dtype(images, dtype=tf.float32)
         return images
 
+    def convert_to_sequences(self, state_like_seqs, action_like_seqs, example_sequence_length):
+        # Convert anything which is a list of tensors along time dimension to one tensor where the first dimension is time
+        state_like_tensors = {}
+        action_like_tensors = {}
+        for example_name, seq in state_like_seqs.items():
+            seq = tf.convert_to_tensor(seq)
+            seq.set_shape([example_sequence_length] + seq.shape.as_list()[1:])
+            state_like_tensors[example_name] = seq
+        for example_name, seq in action_like_seqs.items():
+            seq = tf.convert_to_tensor(seq)
+            seq.set_shape([example_sequence_length - 1] + seq.shape.as_list()[1:])
+            action_like_tensors[example_name] = seq
+
+        return state_like_tensors, action_like_tensors
+
     def slice_sequences(self, state_like_seqs, action_like_seqs, example_sequence_length):
         """
         Slices sequences of length `example_sequence_length` into subsequences
         of length `sequence_length`. The dicts of sequences are updated
         in-place and the same dicts are returned.
         """
-
-        # handle random shifting and frame skip
-        sequence_length = self.hparams.sequence_length  # desired sequence length
-        frame_skip = self.hparams.frame_skip
+        sequence_length = self.hparams.sequence_length
         time_shift = self.hparams.time_shift
-        # Convert anything which is a list of tensors along time dimension to one tensor where the first dimension is time
-        for example_name, seq in state_like_seqs.items():
-            seq = tf.convert_to_tensor(seq)
-            seq.set_shape([example_sequence_length] + seq.shape.as_list()[1:])
-            state_like_seqs[example_name] = seq
-        for example_name, seq in action_like_seqs.items():
-            seq = tf.convert_to_tensor(seq)
-            seq.set_shape([example_sequence_length - 1] + seq.shape.as_list()[1:])
-            action_like_seqs[example_name] = seq
+        frame_skip = self.hparams.frame_skip
 
         # FIXME: does not respect frame_skip or time_shift, assumes frame_skip=0 and time_shift=1
         def choose_random_valid_start_index(constraints_seq):
             mask = make_mask(example_sequence_length, sequence_length)
             valid_start_onehot = constraints_seq * mask
             valid_start_indeces = np.argwhere(valid_start_onehot == 0).squeeze()
+            assert len(valid_start_indeces) > 0
             return np.random.choice(valid_start_indeces, size=1)
 
         if self.hparams.free_space_only:
             t_start = tf.py_func(choose_random_valid_start_index,
-                                     [state_like_seqs['constraints']],
-                                     tf.int32, name='choose_valid_start_t')
+                                 [state_like_seqs['constraints']],
+                                 tf.int32, name='choose_valid_start_t')
         else:
             if (time_shift and self.mode == 'train') or self.hparams.force_time_shift:
                 assert time_shift > 0 and isinstance(time_shift, int)
@@ -264,11 +296,10 @@ class BaseVideoDataset(object):
             state_like_sliced_seqs[example_name] = sliced_seq
         for example_name, seq in action_like_seqs.items():
             sliced_seq = seq[action_like_t_slice]
-            # FIXME: support skipped frames
             sliced_seq.set_shape([(sequence_length - 1) * (frame_skip + 1)] + seq.shape.as_list()[1:])
             action_like_sliced_seqs[example_name] = sliced_seq
 
-        return state_like_seqs, action_like_seqs
+        return state_like_sliced_seqs, action_like_sliced_seqs
 
     def num_examples_per_epoch(self):
         raise NotImplementedError
@@ -391,8 +422,8 @@ class VideoDataset(BaseVideoDataset):
         _, image_shape = self.state_like_names_and_shapes['images']
         state_like_seqs['images'] = self.decode_and_preprocess_images(state_like_seqs['images'], image_shape)
 
-        state_like_seqs, action_like_seqs = \
-            self.slice_sequences(state_like_seqs, action_like_seqs, self._max_sequence_length)
+        state_like_seqs, action_like_seqs = self.convert_to_sequences(state_like_seqs, action_like_seqs,
+                                                                      self._max_sequence_length)
         return state_like_seqs, action_like_seqs
 
 
