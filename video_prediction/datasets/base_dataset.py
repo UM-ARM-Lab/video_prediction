@@ -105,6 +105,7 @@ class BaseVideoDataset(object):
             shuffle_on_val=False,
             use_state=False,
             free_space_only=False,
+            compression_type=None,
         )
         return hparams
 
@@ -146,7 +147,7 @@ class BaseVideoDataset(object):
             if shuffle:
                 random.shuffle(filenames)
 
-        dataset = tf.data.TFRecordDataset(filenames, buffer_size=8 * 1024 * 1024)
+        dataset = tf.data.TFRecordDataset(filenames, buffer_size=8 * 1024 * 1024, compression_type=self.hparams.compression_type)
         # filter to keep only examples which are as long as the requested sequence_length
         dataset = dataset.filter(self.filter)
         if shuffle:
@@ -160,17 +161,17 @@ class BaseVideoDataset(object):
 
         def has_valid_index(constraints_seq):
             mask = make_mask(self._max_sequence_length, self.hparams.sequence_length)
-            valid_start_onehot = constraints_seq * mask
+            valid_start_onehot = constraints_seq.squeeze() @ mask
             valid_start_indeces = np.argwhere(valid_start_onehot == 0).squeeze()
             # Handle the case where there is no such sequence
-            return valid_start_indeces.size > 0
+            return len(valid_start_indeces) > 0
 
         def _filter_free_space_only(state_like_seqs, action_like_seqs):
             del action_like_seqs
             if self.hparams.free_space_only:
                 is_valid = tf.py_func(has_valid_index,
                                       [state_like_seqs['constraints']],
-                                      tf.bool, name='choose_valid_start_t')
+                                      tf.bool, name='has_valid_index')
                 return is_valid
             else:
                 return True
@@ -259,15 +260,15 @@ class BaseVideoDataset(object):
         # FIXME: does not respect frame_skip or time_shift, assumes frame_skip=0 and time_shift=1
         def choose_random_valid_start_index(constraints_seq):
             mask = make_mask(example_sequence_length, sequence_length)
-            valid_start_onehot = constraints_seq * mask
+            valid_start_onehot = constraints_seq.squeeze() @ mask
             valid_start_indeces = np.argwhere(valid_start_onehot == 0).squeeze()
-            assert len(valid_start_indeces) > 0
-            return np.random.choice(valid_start_indeces, size=1)
+            choice = np.random.choice(valid_start_indeces)
+            return choice
 
         if self.hparams.free_space_only:
             t_start = tf.py_func(choose_random_valid_start_index,
                                  [state_like_seqs['constraints']],
-                                 tf.int32, name='choose_valid_start_t')
+                                 tf.int64, name='choose_valid_start_t')
         else:
             if (time_shift and self.mode == 'train') or self.hparams.force_time_shift:
                 assert time_shift > 0 and isinstance(time_shift, int)
@@ -281,7 +282,7 @@ class BaseVideoDataset(object):
                 with tf.control_dependencies([tf.assert_greater_equal(num_shifts, 0,
                                                                       data=[example_sequence_length, num_shifts],
                                                                       message=assert_message)]):
-                    t_start = tf.random_uniform([], 0, num_shifts + 1, dtype=tf.int32, seed=self.seed) * time_shift
+                    t_start = tf.random_uniform([], 0, num_shifts + 1, dtype=tf.int64, seed=self.seed) * time_shift
             else:
                 t_start = 0
 
@@ -325,7 +326,8 @@ class VideoDataset(BaseVideoDataset):
         state_like_names_and_shapes = OrderedDict([(k, list(v)) for k, v in self.state_like_names_and_shapes.items()])
         action_like_names_and_shapes = OrderedDict([(k, list(v)) for k, v in self.action_like_names_and_shapes.items()])
         from google.protobuf.json_format import MessageToDict
-        example = next(tf.python_io.tf_record_iterator(self.filenames[0]))
+        options = tf.python_io.TFRecordOptions(compression_type=self.hparams.compression_type)
+        example = next(tf.python_io.tf_record_iterator(self.filenames[0], options=options))
         self._dict_message = MessageToDict(tf.train.Example.FromString(example))
         for example_name, name_and_shape in (list(state_like_names_and_shapes.items()) +
                                              list(action_like_names_and_shapes.items())):
@@ -346,6 +348,14 @@ class VideoDataset(BaseVideoDataset):
             feature = feature[name]
             list_type, = feature.keys()
             if list_type == 'floatList':
+                inferred_shape = (len(feature[list_type]['value']),)
+                if shape is None:
+                    name_and_shape[1] = inferred_shape
+                else:
+                    if inferred_shape != shape:
+                        raise ValueError('Inferred shape for feature %s is %r but instead got shape %r.' %
+                                         (name, inferred_shape, shape))
+            elif list_type == 'int64List':
                 inferred_shape = (len(feature[list_type]['value']),)
                 if shape is None:
                     name_and_shape[1] = inferred_shape
@@ -392,6 +402,7 @@ class VideoDataset(BaseVideoDataset):
         features = dict()
         for i in range(self._max_sequence_length):
             for example_name, (name, shape) in self.state_like_names_and_shapes.items():
+                # FIXME: support loading of int64 features
                 if example_name == 'images':  # special handling for image
                     features[name % i] = tf.FixedLenFeature([1], tf.string)
                 else:

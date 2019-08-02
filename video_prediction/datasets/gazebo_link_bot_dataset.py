@@ -4,16 +4,17 @@ import re
 
 import tensorflow as tf
 
-from video_prediction.utils import tf_utils
 from .base_dataset import VideoDataset
 
 
 class GazeboLinkBotDataset(VideoDataset):
     def __init__(self, *args, **kwargs):
         super(GazeboLinkBotDataset, self).__init__(*args, **kwargs)
+
         # infer name of image feature
         from google.protobuf.json_format import MessageToDict
-        example = next(tf.python_io.tf_record_iterator(self.filenames[0]))
+        options = tf.python_io.TFRecordOptions(compression_type=self.hparams.compression_type)
+        example = next(tf.python_io.tf_record_iterator(self.filenames[0], options=options))
         dict_message = MessageToDict(tf.train.Example.FromString(example))
         feature = dict_message['features']['feature']
         image_names = set()
