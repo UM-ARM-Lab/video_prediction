@@ -158,13 +158,14 @@ class BaseVideoDataset(object):
         def _parser(serialized_example):
             state_like_seqs, action_like_seqs = self.parser(serialized_example)
             return state_like_seqs, action_like_seqs
+        
+        self.start_mask = make_mask(self._max_sequence_length, self.hparams.sequence_length)
 
         def has_valid_index(constraints_seq):
-            mask = make_mask(self._max_sequence_length, self.hparams.sequence_length)
-            valid_start_onehot = constraints_seq.squeeze() @ mask
+            valid_start_onehot = constraints_seq.squeeze() @ self.start_mask
             valid_start_indeces = np.argwhere(valid_start_onehot == 0).squeeze()
             # Handle the case where there is no such sequence
-            return len(valid_start_indeces) > 0
+            return valid_start_indeces.size > 0
 
         def _filter_free_space_only(state_like_seqs, action_like_seqs):
             del action_like_seqs
@@ -259,10 +260,13 @@ class BaseVideoDataset(object):
 
         # FIXME: does not respect frame_skip or time_shift, assumes frame_skip=0 and time_shift=1
         def choose_random_valid_start_index(constraints_seq):
-            mask = make_mask(example_sequence_length, sequence_length)
-            valid_start_onehot = constraints_seq.squeeze() @ mask
-            valid_start_indeces = np.argwhere(valid_start_onehot == 0).squeeze()
-            choice = np.random.choice(valid_start_indeces)
+            valid_start_onehot = constraints_seq.squeeze() @ self.start_mask
+            valid_start_indeces = np.argwhere(valid_start_onehot == 0)
+            valid_start_indeces = np.atleast_1d(valid_start_indeces.squeeze())
+            try:
+                choice = np.random.choice(valid_start_indeces)
+            except Exception:
+                print('invalid!', valid_start_indeces)
             return choice
 
         if self.hparams.free_space_only:

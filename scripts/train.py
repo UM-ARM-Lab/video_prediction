@@ -14,6 +14,10 @@ from datetime import datetime
 import git
 import numpy as np
 
+from video_prediction.utils import memory_util
+
+memory_util.vlog(1)
+
 import tensorflow as tf
 
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -279,6 +283,9 @@ def main():
                 fetches["eval_summary"] = model.eval_summary_op
 
             run_start_time = time.time()
+            # with memory_util.capture_stderr() as stderr:
+            #     results = sess.run(fetches, options=tf.RunOptions(report_tensor_allocations_upon_oom=True))
+            # memory_util.print_memory_timeline(stderr, ignore_less_than_bytes=1000)
             results = sess.run(fetches)
             run_elapsed_time = time.time() - run_start_time
             if run_elapsed_time > 1.8 and step > 0 and set(fetches.keys()) == {"global_step", "train_op"}:
