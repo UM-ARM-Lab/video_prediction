@@ -14,9 +14,9 @@ from datetime import datetime
 import git
 import numpy as np
 
-from video_prediction.utils import memory_util
-
-memory_util.vlog(1)
+# from video_prediction.utils import memory_util
+#
+# memory_util.vlog(1)
 
 import tensorflow as tf
 
