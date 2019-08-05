@@ -7,6 +7,6 @@
     "sequence_length": 10,
     "time_shift": 1,
     "use_state": true,
-    "free_space_only": false,
+    "free_space_only": true,
     "compression_type": "ZLIB"
 }

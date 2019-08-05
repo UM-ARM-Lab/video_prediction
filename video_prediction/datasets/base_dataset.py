@@ -43,6 +43,7 @@ class BaseVideoDataset(object):
         self.mode = mode
         self.num_epochs = num_epochs
         self.seed = seed
+        self._max_sequence_length = None
 
         if self.mode not in ('train', 'val', 'test'):
             raise ValueError('Invalid mode %s' % self.mode)
@@ -65,6 +66,7 @@ class BaseVideoDataset(object):
         self.action_like_names_and_shapes = OrderedDict()
 
         self.hparams = self.parse_hparams(hparams_dict, hparams)
+        self.start_mask = None
 
     def get_default_hparams_dict(self):
         """
@@ -158,8 +160,6 @@ class BaseVideoDataset(object):
         def _parser(serialized_example):
             state_like_seqs, action_like_seqs = self.parser(serialized_example)
             return state_like_seqs, action_like_seqs
-        
-        self.start_mask = make_mask(self._max_sequence_length, self.hparams.sequence_length)
 
         def has_valid_index(constraints_seq):
             valid_start_onehot = constraints_seq.squeeze() @ self.start_mask
@@ -169,13 +169,10 @@ class BaseVideoDataset(object):
 
         def _filter_free_space_only(state_like_seqs, action_like_seqs):
             del action_like_seqs
-            if self.hparams.free_space_only:
-                is_valid = tf.py_func(has_valid_index,
-                                      [state_like_seqs['constraints']],
-                                      tf.bool, name='has_valid_index')
-                return is_valid
-            else:
-                return True
+            is_valid = tf.py_func(has_valid_index,
+                                  [state_like_seqs['constraints']],
+                                  tf.bool, name='has_valid_index')
+            return is_valid
 
         def _flatten(state_like_sliced_seqs, action_like_sliced_seqs):
             flat_input_dict = state_like_sliced_seqs
@@ -186,12 +183,22 @@ class BaseVideoDataset(object):
             example_sequence_length = self._max_sequence_length
             return self.slice_sequences(state_like_seqs, action_like_seqs, example_sequence_length)
 
-        parsed_dataset = dataset.map(_parser)
-        filtered_dataset = parsed_dataset.filter(_filter_free_space_only)
-        sliced_dataset = filtered_dataset.map(_slice_sequences)
-        flattened_dataset = sliced_dataset.map(_flatten)
-        batched_dataset = flattened_dataset.batch(batch_size, drop_remainder=True)
-        dataset = batched_dataset.prefetch(batch_size)
+        num_parallel_calls = None
+        if self.hparams.free_space_only:
+            dataset = dataset.map(
+                _parser, num_parallel_calls=num_parallel_calls).filter(
+                _filter_free_space_only).map(
+                _slice_sequences, num_parallel_calls=num_parallel_calls).map(
+                _flatten, num_parallel_calls=num_parallel_calls).batch(
+                batch_size, drop_remainder=True).prefetch(
+                batch_size)
+        else:
+            dataset = dataset.map(
+                _parser).map(
+                _slice_sequences).map(
+                _flatten).batch(
+                batch_size, drop_remainder=True).prefetch(
+                batch_size)
         return dataset
 
     def make_batch(self, batch_size, shuffle=True):
@@ -319,7 +326,6 @@ class VideoDataset(BaseVideoDataset):
 
     def __init__(self, *args, **kwargs):
         super(VideoDataset, self).__init__(*args, **kwargs)
-        self._max_sequence_length = None
         self._dict_message = None
 
     def _check_or_infer_shapes(self):
@@ -393,6 +399,8 @@ class VideoDataset(BaseVideoDataset):
         # set sequence_length to the longest possible if it is not specified
         if not self.hparams.sequence_length:
             self.hparams.sequence_length = (self._max_sequence_length - 1) // (self.hparams.frame_skip + 1) + 1
+
+        self.start_mask = make_mask(self._max_sequence_length, self.hparams.sequence_length)
 
     def set_sequence_length(self, sequence_length):
         if not sequence_length:
