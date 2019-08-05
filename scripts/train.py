@@ -277,9 +277,6 @@ def main():
             if should_eval(step, args.eval_summary_freq):
                 fetches["eval_summary"] = model.eval_summary_op
 
-            # with memory_util.capture_stderr() as stderr:
-            #     results = sess.run(fetches, options=tf.RunOptions(report_tensor_allocations_upon_oom=True))
-            # memory_util.print_memory_timeline(stderr, ignore_less_than_bytes=1000)
             results = sess.run(fetches)
 
             if (should(step, args.summary_freq) or
@@ -347,17 +344,6 @@ def main():
                     remaining_time = (max_steps - (start_step + step + 1)) * average_time
                     print("          image/sec %0.1f  remaining %dm (%0.1fh) (%0.1fd)" %
                           (images_per_sec, remaining_time / 60, remaining_time / 60 / 60, remaining_time / 60 / 60 / 24))
-
-                if results['d_losses']:
-                    print("d_loss", results["d_loss"])
-                for name, loss in results['d_losses'].items():
-                    print("  ", name, loss)
-                if results['g_losses']:
-                    print("g_loss", results["g_loss"])
-                for name, loss in results['g_losses'].items():
-                    print("  ", name, loss)
-                if isinstance(model.learning_rate, tf.Tensor):
-                    print("learning_rate", results["learning_rate"])
 
             if should(step, args.save_freq):
                 print("saving model to", args.output_dir)

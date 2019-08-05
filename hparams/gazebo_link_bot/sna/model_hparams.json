@@ -1,5 +1,5 @@
 {
-    "batch_size": 16,
+    "batch_size": 32,
     "l1_weight": 0.0,
     "l2_weight": 1.0,
     "ngf": 16,

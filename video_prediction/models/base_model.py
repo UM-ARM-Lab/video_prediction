@@ -434,10 +434,8 @@ class VideoPredictionModel(BaseVideoPredictionModel):
         if self.mode == 'train':
             with tf.name_scope("discriminator_loss"):
                 d_losses = self.discriminator_loss_fn(inputs, outputs)
-                print_loss_info(d_losses, inputs, outputs)
             with tf.name_scope("generator_loss"):
                 g_losses = self.generator_loss_fn(inputs, outputs)
-                print_loss_info(g_losses, inputs, outputs)
                 if discrim_outputs_post:
                     outputs_post = OrderedDict(itertools.chain(gen_outputs.items(), discrim_outputs_post.items()))
                     # generator losses after the discriminator weights have been updated
