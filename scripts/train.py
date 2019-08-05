@@ -282,14 +282,10 @@ def main():
             if should_eval(step, args.eval_summary_freq):
                 fetches["eval_summary"] = model.eval_summary_op
 
-            run_start_time = time.time()
             # with memory_util.capture_stderr() as stderr:
             #     results = sess.run(fetches, options=tf.RunOptions(report_tensor_allocations_upon_oom=True))
             # memory_util.print_memory_timeline(stderr, ignore_less_than_bytes=1000)
             results = sess.run(fetches)
-            run_elapsed_time = time.time() - run_start_time
-            if run_elapsed_time > 1.8 and step > 0 and set(fetches.keys()) == {"global_step", "train_op"}:
-                print('running train_op took too long (%0.1fs)' % run_elapsed_time)
 
             if (should(step, args.summary_freq) or
                     should(step, args.image_summary_freq) or
