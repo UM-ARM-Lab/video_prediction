@@ -186,11 +186,11 @@ class BaseVideoDataset(object):
 
         num_parallel_calls = None
         if self.hparams.free_space_only:
-            dataset = dataset.ap(
-                _parser, num_parallel_calls=num_parallel_calls).filter(
+            dataset = dataset.map(
+                _parser).filter(
                 _filter_free_space_only).map(
-                _slice_sequences, num_parallel_calls=num_parallel_calls).map(
-                _flatten, num_parallel_calls=num_parallel_calls).batch(
+                _slice_sequences).map(
+                _flatten).batch(
                 batch_size, drop_remainder=True).prefetch(
                 batch_size)
         else:
@@ -363,6 +363,8 @@ class VideoDataset(BaseVideoDataset):
         Parses a single tf.train.Example into images, states, actions, etc tensors.
         """
         features = dict()
+        for example_name, (name, shape) in self.trajectory_constant_names_and_shapes.items():
+            features[name] = tf.FixedLenFeature(shape, tf.float32)
         for i in range(self._max_sequence_length):
             for example_name, (name, shape) in self.state_like_names_and_shapes.items():
                 # FIXME: support loading of int64 features
@@ -370,8 +372,6 @@ class VideoDataset(BaseVideoDataset):
                     features[name % i] = tf.FixedLenFeature([1], tf.string)
                 else:
                     features[name % i] = tf.FixedLenFeature(shape, tf.float32)
-            for example_name, (name, shape) in self.trajectory_constant_names_and_shapes.items():
-                features[name % i] = tf.FixedLenFeature(shape, tf.float32)
         for i in range(self._max_sequence_length - 1):
             for example_name, (name, shape) in self.action_like_names_and_shapes.items():
                 features[name % i] = tf.FixedLenFeature(shape, tf.float32)
@@ -384,6 +384,9 @@ class VideoDataset(BaseVideoDataset):
         for i in range(self._max_sequence_length):
             for example_name, (name, shape) in self.state_like_names_and_shapes.items():
                 state_like_seqs[example_name].append(features[name % i])
+            for example_name, (name, shape) in self.trajectory_constant_names_and_shapes.items():
+                if example_name not in state_like_seqs:
+                    state_like_seqs[example_name] = []
         for i in range(self._max_sequence_length - 1):
             for example_name, (name, shape) in self.action_like_names_and_shapes.items():
                 action_like_seqs[example_name].append(features[name % i])
