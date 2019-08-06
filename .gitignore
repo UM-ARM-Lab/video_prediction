@@ -110,3 +110,4 @@ results_test_samples
 logs
 *.tfrecord*
 results
+resutls*

@@ -48,7 +48,7 @@ class LinkBotDataset(NonVideoDataset):
         hparams = dict(
             image_shape=[64, 64, 3],
             sdf_shape=[101, 101],
-            rope_config_dim=8,
+            rope_config_dim=6,
         )
         hparams.update(default_hparams)
         return hparams

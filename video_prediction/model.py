@@ -10,9 +10,10 @@ from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+from matplotlib import animation
+from matplotlib.animation import FuncAnimation
 
 from video_prediction import models
-from video_prediction.utils.ffmpeg_gif import save_gif
 
 
 class VisualPredictionModel:
@@ -159,36 +160,70 @@ def build_model(checkpoint, model_str, model_hparams, context_length, input_plac
     return model
 
 
-def visualize(results, context_length, args):
+def visualize_image_rollout(results, context_length, args, show_state=False):
     # first dimension is batch size, second is time
     context_images = (results['input_images'][0, :context_length] * 255.0).astype(np.uint8)
     context_states = results['input_states'][0, :context_length]
     gen_images = (results['gen_images'][0, context_length:] * 255.0).astype(np.uint8)
     gen_states = results['gen_states'][0, context_length:]
 
+    gen_images = np.concatenate((context_images, gen_images))
     # Plot trajectory in states space
     # FIXME: this assumes 2d state
-    plt.scatter(context_states[:, 0], context_states[:, 1], label='context_states', c='b')
-    plt.scatter(gen_states[:, 0], gen_states[:, 1], label='gen_states', c='r')
-    states_path = np.concatenate((context_states, gen_states))
-    plt.plot(states_path[:, 0], states_path[:, 1], c='r')
-    plt.legend()
-    plt.axis("equal")
+    if show_state:
+        plt.scatter(context_states[:, 0], context_states[:, 1], label='context_states', c='b')
+        plt.scatter(gen_states[:, 0], gen_states[:, 1], label='gen_states', c='r')
+        states_path = np.concatenate((context_states, gen_states))
+        plt.plot(states_path[:, 0], states_path[:, 1], c='r')
+        plt.legend()
+        plt.axis("equal")
 
-    states_plot_filename = os.path.join(args.results_dir, "states_plot.png")
-    plt.savefig(fname=states_plot_filename)
+        states_plot_filename = os.path.join(args.results_dir, "states_plot.png")
+        plt.savefig(fname=states_plot_filename)
 
-    # Save gif of input images
-    input_images_filename = 'input_image.gif'
-    save_gif(os.path.join(args.results_dir, input_images_filename), context_images, fps=args.fps)
+    fig, ax = plt.subplots()
+    ax.set_title("prediction [image]")
+    img = ax.imshow(gen_images[0].squeeze(), cmap='rainbow')
 
-    # Save gif of generated images
-    gen_images_filename = 'gen_image.gif'
-    context_and_gen_images = np.concatenate((context_images, gen_images), axis=0)
-    save_gif(os.path.join(args.results_dir, gen_images_filename), context_and_gen_images, fps=args.fps)
+    def image_update(t):
+        fixed_image = np.clip(gen_images[t].squeeze(), 0, 255)
+        img.set_data(fixed_image)
+
+    anim = FuncAnimation(fig, image_update, frames=gen_images.shape[0], interval=1000 / args.fps, repeat=True)
+    handles = [anim]
+    writer = animation.writers['ffmpeg']
+    anim.save(os.path.join(args.results_dir, 'gen_images.gif'), writer=writer)
 
     # Save individual frames of the prediction
     gen_image_filename_pattern = 'gen_image_%%05d_%%0%dd.png' % max(2, len(str(len(gen_images) - 1)))
     for time_step_idx, gen_image in enumerate(gen_images):
         gen_image_filename = gen_image_filename_pattern % (time_step_idx, time_step_idx)
         plt.imsave(os.path.join(args.results_dir, gen_image_filename), gen_image)
+
+    return handles
+
+
+def visualize_pixel_rollout(results, context_length, source_pixel, args):
+    gen_pix_distribs = (results['gen_pix_distribs'][0, context_length:] * 255.0).astype(np.uint8)
+
+    fig, ax = plt.subplots()
+    ax.set_title("prediction [pix distrib]")
+    pix_img = ax.imshow(gen_pix_distribs[0].squeeze(), cmap='rainbow')
+    ax.scatter(source_pixel.col, source_pixel.row, c='r', marker='D', s=12)
+
+    def pixel_update(t):
+        fixed_image = np.clip(gen_pix_distribs[t].squeeze(), 0, 255)
+        pix_img.set_data(fixed_image)
+
+    anim = FuncAnimation(fig, pixel_update, frames=gen_pix_distribs.shape[0], interval=1000 / args.fps, repeat=True)
+    handles = [anim]
+    writer = animation.FFMpegWriter(extra_args=['-vcodec', 'libx264'], fps=args.fps)
+    anim.save(os.path.join(args.results_dir, 'gen_pix_distrib.gif'), writer=writer)
+
+    # Save individual frames of the prediction
+    gen_image_filename_pattern = 'gen_image_%%05d_%%0%dd.png' % max(2, len(str(len(gen_pix_distribs) - 1)))
+    for time_step_idx, gen_image in enumerate(gen_pix_distribs):
+        gen_image_filename = gen_image_filename_pattern % (time_step_idx, time_step_idx)
+        plt.imsave(os.path.join(args.results_dir, gen_image_filename), gen_image.squeeze())
+
+    return handles
