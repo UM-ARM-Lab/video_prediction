@@ -4,11 +4,11 @@ from __future__ import division, print_function
 import glob
 import os
 import random
-import re
 from collections import OrderedDict
 
 import numpy as np
 import tensorflow as tf
+from google.protobuf.json_format import MessageToDict
 from tensorflow.contrib.training import HParams
 
 
@@ -64,6 +64,7 @@ class BaseVideoDataset(object):
 
         self.state_like_names_and_shapes = OrderedDict()
         self.action_like_names_and_shapes = OrderedDict()
+        self.trajectory_constant_names_and_shapes = OrderedDict()
 
         self.hparams = self.parse_hparams(hparams_dict, hparams)
         self.start_mask = None
@@ -185,7 +186,7 @@ class BaseVideoDataset(object):
 
         num_parallel_calls = None
         if self.hparams.free_space_only:
-            dataset = dataset.map(
+            dataset = dataset.ap(
                 _parser, num_parallel_calls=num_parallel_calls).filter(
                 _filter_free_space_only).map(
                 _slice_sequences, num_parallel_calls=num_parallel_calls).map(
@@ -333,68 +334,18 @@ class VideoDataset(BaseVideoDataset):
         Should be called after state_like_names_and_shapes and
         action_like_names_and_shapes have been finalized.
         """
-        state_like_names_and_shapes = OrderedDict([(k, list(v)) for k, v in self.state_like_names_and_shapes.items()])
-        action_like_names_and_shapes = OrderedDict([(k, list(v)) for k, v in self.action_like_names_and_shapes.items()])
-        from google.protobuf.json_format import MessageToDict
         options = tf.python_io.TFRecordOptions(compression_type=self.hparams.compression_type)
         example = next(tf.python_io.tf_record_iterator(self.filenames[0], options=options))
-        self._dict_message = MessageToDict(tf.train.Example.FromString(example))
-        for example_name, name_and_shape in (list(state_like_names_and_shapes.items()) +
-                                             list(action_like_names_and_shapes.items())):
-            name, shape = name_and_shape
-            feature = self._dict_message['features']['feature']
-            names = [name_ for name_ in feature.keys() if re.search(name.replace('%d', '\d+'), name_) is not None]
-            if not names:
-                raise ValueError('Could not found any feature with name pattern %s.' % name)
-            if example_name in self.state_like_names_and_shapes:
-                sequence_length = len(names)
-            else:
-                sequence_length = len(names) + 1
-            if self._max_sequence_length is None:
-                self._max_sequence_length = sequence_length
-            else:
-                self._max_sequence_length = min(sequence_length, self._max_sequence_length)
-            name = names[0]
-            feature = feature[name]
-            list_type, = feature.keys()
-            if list_type == 'floatList':
-                inferred_shape = (len(feature[list_type]['value']),)
-                if shape is None:
-                    name_and_shape[1] = inferred_shape
-                else:
-                    if inferred_shape != shape:
-                        raise ValueError('Inferred shape for feature %s is %r but instead got shape %r.' %
-                                         (name, inferred_shape, shape))
-            elif list_type == 'int64List':
-                inferred_shape = (len(feature[list_type]['value']),)
-                if shape is None:
-                    name_and_shape[1] = inferred_shape
-                else:
-                    if inferred_shape != shape:
-                        raise ValueError('Inferred shape for feature %s is %r but instead got shape %r.' %
-                                         (name, inferred_shape, shape))
-            elif list_type == 'bytesList':
-                image_str, = feature[list_type]['value']
-                # try to infer image shape
-                inferred_shape = None
-                if not self.jpeg_encoding:
-                    spatial_size = len(image_str) // 4
-                    height = width = int(np.sqrt(spatial_size))  # assume square image
-                    if len(image_str) == (height * width * 4):
-                        inferred_shape = (height, width, 3)
-                if shape is None:
-                    if inferred_shape is not None:
-                        name_and_shape[1] = inferred_shape
-                    else:
-                        raise ValueError('Unable to infer shape for feature %s of size %d.' % (name, len(image_str)))
-                else:
-                    if inferred_shape is not None and inferred_shape != shape:
-                        raise ValueError('Inferred shape for feature %s is %r but instead got shape %r.' %
-                                         (name, inferred_shape, shape))
-            else:
-                raise NotImplementedError
-        self.state_like_names_and_shapes = OrderedDict([(k, tuple(v)) for k, v in state_like_names_and_shapes.items()])
-        self.action_like_names_and_shapes = OrderedDict([(k, tuple(v)) for k, v in action_like_names_and_shapes.items()])
+        dict_message = MessageToDict(tf.train.Example.FromString(example))
+        feature = dict_message['features']['feature']
+        self._max_sequence_length = 0
+        for feature_name in feature.keys():
+            try:
+                # plus 1 because time is 0 indexed here
+                time_str = feature_name.split("/")[0]
+                self._max_sequence_length = max(self._max_sequence_length, int(time_str) + 1)
+            except ValueError:
+                pass
 
         # set sequence_length to the longest possible if it is not specified
         if not self.hparams.sequence_length:
@@ -419,15 +370,11 @@ class VideoDataset(BaseVideoDataset):
                     features[name % i] = tf.FixedLenFeature([1], tf.string)
                 else:
                     features[name % i] = tf.FixedLenFeature(shape, tf.float32)
+            for example_name, (name, shape) in self.trajectory_constant_names_and_shapes.items():
+                features[name % i] = tf.FixedLenFeature(shape, tf.float32)
         for i in range(self._max_sequence_length - 1):
             for example_name, (name, shape) in self.action_like_names_and_shapes.items():
                 features[name % i] = tf.FixedLenFeature(shape, tf.float32)
-
-        # check that the features are in the tfrecord
-        for name in features.keys():
-            if name not in self._dict_message['features']['feature']:
-                raise ValueError('Feature with name %s not found in tfrecord. Possible feature names are:\n%s' %
-                                 (name, '\n'.join(sorted(self._dict_message['features']['feature'].keys()))))
 
         # parse all the features of all time steps together
         features = tf.parse_single_example(serialized_example, features=features)
@@ -447,106 +394,4 @@ class VideoDataset(BaseVideoDataset):
 
         state_like_seqs, action_like_seqs = self.convert_to_sequences(state_like_seqs, action_like_seqs,
                                                                       self._max_sequence_length)
-        return state_like_seqs, action_like_seqs
-
-
-class SequenceExampleVideoDataset(BaseVideoDataset):
-    """
-    This class supports reading tfrecords where an entire sequence is stored as
-    a single tf.train.SequenceExample.
-    """
-
-    def parser(self, serialized_example):
-        """
-        Parses a single tf.train.SequenceExample into images, states, actions, etc tensors.
-        """
-        sequence_features = dict()
-        for example_name, (name, shape) in self.state_like_names_and_shapes.items():
-            if example_name == 'images':  # special handling for image
-                sequence_features[name] = tf.FixedLenSequenceFeature([1], tf.string)
-            else:
-                sequence_features[name] = tf.FixedLenSequenceFeature(shape, tf.float32)
-        for example_name, (name, shape) in self.action_like_names_and_shapes.items():
-            sequence_features[name] = tf.FixedLenSequenceFeature(shape, tf.float32)
-
-        _, sequence_features = tf.parse_single_sequence_example(
-            serialized_example, sequence_features=sequence_features)
-
-        state_like_seqs = OrderedDict()
-        action_like_seqs = OrderedDict()
-        for example_name, (name, shape) in self.state_like_names_and_shapes.items():
-            state_like_seqs[example_name] = sequence_features[name]
-        for example_name, (name, shape) in self.action_like_names_and_shapes.items():
-            action_like_seqs[example_name] = sequence_features[name]
-
-        # the sequence_length of this example is determined by the shortest sequence
-        example_sequence_length = []
-        for example_name, seq in state_like_seqs.items():
-            example_sequence_length.append(tf.shape(seq)[0])
-        for example_name, seq in action_like_seqs.items():
-            example_sequence_length.append(tf.shape(seq)[0] + 1)
-        example_sequence_length = tf.reduce_min(example_sequence_length)
-
-        state_like_seqs, action_like_seqs = \
-            self.slice_sequences(state_like_seqs, action_like_seqs, example_sequence_length)
-
-        # decode and preprocess images on the sampled slice only
-        _, image_shape = self.state_like_names_and_shapes['images']
-        state_like_seqs['images'] = self.decode_and_preprocess_images(state_like_seqs['images'], image_shape)
-        return state_like_seqs, action_like_seqs
-
-
-class VarLenFeatureVideoDataset(BaseVideoDataset):
-    """
-    This class supports reading tfrecords where an entire sequence is stored as
-    a single tf.train.Example.
-
-    https://github.com/tensorflow/tensorflow/issues/15977
-    """
-
-    def filter(self, serialized_example):
-        features = dict()
-        features['sequence_length'] = tf.FixedLenFeature((), tf.int64)
-        features = tf.parse_single_example(serialized_example, features=features)
-        example_sequence_length = features['sequence_length']
-        return tf.greater_equal(example_sequence_length, self.hparams.sequence_length)
-
-    def parser(self, serialized_example):
-        """
-        Parses a single tf.train.SequenceExample into images, states, actions, etc tensors.
-        """
-        features = dict()
-        features['sequence_length'] = tf.FixedLenFeature((), tf.int64)
-        for example_name, (name, shape) in self.state_like_names_and_shapes.items():
-            if example_name == 'images':
-                features[name] = tf.VarLenFeature(tf.string)
-            else:
-                features[name] = tf.VarLenFeature(tf.float32)
-        for example_name, (name, shape) in self.action_like_names_and_shapes.items():
-            features[name] = tf.VarLenFeature(tf.float32)
-
-        features = tf.parse_single_example(serialized_example, features=features)
-
-        example_sequence_length = features['sequence_length']
-
-        state_like_seqs = OrderedDict()
-        action_like_seqs = OrderedDict()
-        for example_name, (name, shape) in self.state_like_names_and_shapes.items():
-            if example_name == 'images':
-                seq = tf.sparse_tensor_to_dense(features[name], '')
-            else:
-                seq = tf.sparse_tensor_to_dense(features[name])
-                seq = tf.reshape(seq, [example_sequence_length] + list(shape))
-            state_like_seqs[example_name] = seq
-        for example_name, (name, shape) in self.action_like_names_and_shapes.items():
-            seq = tf.sparse_tensor_to_dense(features[name])
-            seq = tf.reshape(seq, [example_sequence_length - 1] + list(shape))
-            action_like_seqs[example_name] = seq
-
-        state_like_seqs, action_like_seqs = \
-            self.slice_sequences(state_like_seqs, action_like_seqs, example_sequence_length)
-
-        # decode and preprocess images on the sampled slice only
-        _, image_shape = self.state_like_names_and_shapes['images']
-        state_like_seqs['images'] = self.decode_and_preprocess_images(state_like_seqs['images'], image_shape)
         return state_like_seqs, action_like_seqs

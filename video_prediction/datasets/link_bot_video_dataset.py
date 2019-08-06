@@ -3,16 +3,16 @@ import os
 import re
 
 import tensorflow as tf
+from google.protobuf.json_format import MessageToDict
 
 from .base_dataset import VideoDataset
 
 
-class GazeboLinkBotDataset(VideoDataset):
+class LinkBotVideoDataset(VideoDataset):
     def __init__(self, *args, **kwargs):
-        super(GazeboLinkBotDataset, self).__init__(*args, **kwargs)
+        super(LinkBotVideoDataset, self).__init__(*args, **kwargs)
 
         # infer name of image feature
-        from google.protobuf.json_format import MessageToDict
         options = tf.python_io.TFRecordOptions(compression_type=self.hparams.compression_type)
         example = next(tf.python_io.tf_record_iterator(self.filenames[0], options=options))
         dict_message = MessageToDict(tf.train.Example.FromString(example))
@@ -33,21 +33,28 @@ class GazeboLinkBotDataset(VideoDataset):
                 image_name = image_names.pop()
             else:
                 raise ValueError('The examples have images under more than one name.')
-        self.state_like_names_and_shapes['images'] = '%%d/%s/encoded' % image_name, None
+        self.state_like_names_and_shapes['images'] = '%%d/%s/encoded' % image_name, self.hparams.image_shape
         if self.hparams.use_state:
             self.state_like_names_and_shapes['states'] = '%d/endeffector_pos', (2,)
-            self.state_like_names_and_shapes['constraints'] = '%d/constraint', (1,)
             self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
+        self.state_like_names_and_shapes['constraints'] = '%d/constraint', (1,)
+        self.trajectory_constant_names_and_shapes['sdf'] = 'sdf/sdf', self.hparams.sdf_shape.extend([1])
+        self.trajectory_constant_names_and_shapes['sdf_gradient'] = 'sdf/gradient', self.hparams.sdf_shape.extend([2])
+        self.trajectory_constant_names_and_shapes['sdf_resolution'] = 'sdf/resolution', (2,)
+        self.trajectory_constant_names_and_shapes['sdf_origin'] = 'sdf/origin', (2,)
         self._check_or_infer_shapes()
 
     def get_default_hparams_dict(self):
-        default_hparams = super(GazeboLinkBotDataset, self).get_default_hparams_dict()
+        default_hparams = super(LinkBotVideoDataset, self).get_default_hparams_dict()
         hparams = dict(
             context_frames=2,
             sequence_length=12,
             long_sequence_length=30,
             time_shift=2,
             free_space_only=False,
+            image_shape=[64, 64, 3],
+            sdf_shape=[100, 100],
+            rope_config_dim=6,
         )
         return dict(itertools.chain(default_hparams.items(), hparams.items()))
 
@@ -56,7 +63,7 @@ class GazeboLinkBotDataset(VideoDataset):
         return False
 
     def parser(self, serialized_example):
-        state_like_seqs, action_like_seqs = super(GazeboLinkBotDataset, self).parser(serialized_example)
+        state_like_seqs, action_like_seqs = super(LinkBotVideoDataset, self).parser(serialized_example)
         return state_like_seqs, action_like_seqs
 
     def num_examples_per_epoch(self):

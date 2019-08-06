@@ -1,14 +1,12 @@
 from .base_dataset import BaseVideoDataset
-from .base_dataset import VideoDataset, SequenceExampleVideoDataset, VarLenFeatureVideoDataset
+from .base_dataset import VideoDataset
 from .google_robot_dataset import GoogleRobotVideoDataset
-from .sv2p_dataset import SV2PVideoDataset
-from .softmotion_dataset import SoftmotionVideoDataset
-from .kth_dataset import KTHVideoDataset
-#from .ucf101_dataset import UCF101VideoDataset
-#from .cartgripper_dataset import CartgripperVideoDataset
+from .link_bot_dataset import LinkBotDataset
+from .link_bot_video_dataset import LinkBotVideoDataset
 from .moving_block_dataset import MovingBlockDataset
+from .softmotion_dataset import SoftmotionVideoDataset
+from .sv2p_dataset import SV2PVideoDataset
 from .unity_cloth_dataset import UnityClothDataset
-from .gazebo_link_bot_dataset import GazeboLinkBotDataset
 
 
 def get_dataset_class(dataset):
@@ -17,15 +15,11 @@ def get_dataset_class(dataset):
         'sv2p': 'SV2PVideoDataset',
         'softmotion': 'SoftmotionVideoDataset',
         'bair': 'SoftmotionVideoDataset',  # alias of softmotion
-        'kth': 'KTHVideoDataset',
-        'ucf101': 'UCF101VideoDataset',
-        'cartgripper': 'CartgripperVideoDataset',
         'moving_block': 'MovingBlockDataset',
         'unity_cloth': 'UnityClothDataset',
-        'link_bot': 'GazeboLinkBotDataset',
+        'video_link_bot': 'LinkBotVideoDataset',
+        'link_bot': 'LinkBotDataset',
     }
     dataset_class = dataset_mappings.get(dataset, dataset)
     dataset_class = globals().get(dataset_class)
-    if dataset_class is None or not issubclass(dataset_class, BaseVideoDataset):
-        raise ValueError('Invalid dataset %s' % dataset)
     return dataset_class
