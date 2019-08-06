@@ -60,7 +60,7 @@ def main():
                         help="save frequency of eval summaries for train/validation set")
     parser.add_argument("--accum_eval_summary_freq", type=int, default=100000,
                         help="save frequency of accumulated eval summaries for validation set only")
-    parser.add_argument("--progress_freq", type=int, default=50, help="display progress every progress_freq steps")
+    parser.add_argument("--progress_freq", type=int, default=100, help="display progress every progress_freq steps")
     parser.add_argument("--save_freq", type=int, default=5000, help="save frequence of model, 0 to disable")
 
     parser.add_argument("--aggregate_nccl", type=int, default=0,
