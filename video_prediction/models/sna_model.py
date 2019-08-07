@@ -13,7 +13,7 @@
 # limitations under the License.
 # ==============================================================================
 
-"""Model architecture for predictive model, including CDNA, DNA, and STP."""
+"""Model architecture for predictive model, including CDNA (DNA and STP removed for my use)"""
 
 import itertools
 
@@ -99,17 +99,10 @@ class Prediction_Model(object):
         self.actions = actions
         self.iter_num = iter_num
         self.conf = conf
+        print(conf)
         self.images = images
 
-        self.cdna, self.stp, self.dna = False, False, False
-        if self.conf['model'] == 'CDNA':
-            self.cdna = True
-        elif self.conf['model'] == 'DNA':
-            self.dna = True
-        elif self.conf['model'] == 'STP':
-            self.stp = True
-        if self.stp + self.cdna + self.dna != 1:
-            raise ValueError("More than one option selected!")
+        self.cdna = True
 
         self.k = conf['schedsamp_k']
         self.use_state = conf['use_state']
@@ -213,12 +206,7 @@ class Prediction_Model(object):
                                 prev_pix_distrib2 = tf.expand_dims(prev_pix_distrib2, -1)
 
                 if 'refeed_firstimage' in self.conf:
-                    assert self.conf['model'] == 'STP'
-                    if t > 1:
-                        input_image = self.images[1]
-                        print('refeed with image 1')
-                    else:
-                        input_image = prev_image
+                    raise NotImplementedError()
                 else:
                     input_image = prev_image
 
@@ -307,19 +295,7 @@ class Prediction_Model(object):
                     print('transform from image 1')
 
                 if self.conf['model'] == 'DNA':
-                    # Using largest hidden state for predicting untied conv kernels.
-                    trafo_input = slim.layers.conv2d_transpose(
-                        enc6, KERN_SIZE ** 2, 1, stride=1, scope='convt4_cam2')
-
-                    transformed_l = [self.dna_transformation(prev_image, trafo_input, self.conf['kern_size'])]
-                    if self.pix_distributions1 != None:
-                        transf_distrib_ndesig1 = [self.dna_transformation(prev_pix_distrib1, trafo_input, KERN_SIZE)]
-                        if 'ndesig' in self.conf:
-                            transf_distrib_ndesig2 = [
-                                self.dna_transformation(prev_pix_distrib2, trafo_input, KERN_SIZE)]
-
-                    extra_masks = 1  ## extra_masks = 2 is needed for running singleview_shifted!!
-                    # extra_masks = 2
+                    raise NotImplementedError()
 
                 if self.conf['model'] == 'CDNA':
                     if 'gen_pix' in self.conf:
@@ -356,37 +332,7 @@ class Prediction_Model(object):
                             self.moved_pix_distrib2.append(transf_distrib_ndesig2)
 
                 if self.conf['model'] == 'STP':
-                    enc7 = slim.layers.conv2d_transpose(enc6, color_channels, 1, stride=1, scope='convt5', activation_fn=None)
-                    # This allows the network to also generate one image from scratch,
-                    # which is useful when regions of the image become unoccluded.
-                    if 'gen_pix' in self.conf:
-                        self.gen_extra_image = tf.nn.sigmoid(enc7)
-                        transformed_l = [self.gen_extra_image]
-                        extra_masks = 2
-                    else:
-                        transformed_l = []
-                        extra_masks = 1
-
-                    enc_stp = tf.reshape(hidden5, [int(batch_size), -1])
-                    stp_input = slim.layers.fully_connected(
-                        enc_stp, 200, scope='fc_stp_cam2')
-
-                    # disabling capability to generete pixels
-                    reuse_stp = None
-                    if reuse:
-                        reuse_stp = reuse
-
-                    # enable the generation of pixels:
-                    transformed, trafo = self.stp_transformation(prev_image, stp_input, self.num_masks, reuse_stp, suffix='cam2')
-                    transformed_l += transformed
-
-                    self.trafos.append(trafo)
-                    self.moved_images.append(transformed_l)
-
-                    if self.pix_distributions1 != None:
-                        transf_distrib_ndesig1, _ = self.stp_transformation(prev_pix_distrib1, stp_input, suffix='cam2',
-                                                                            reuse=True)
-                        self.moved_pix_distrib1.append(transf_distrib_ndesig1)
+                    raise NotImplementedError()
 
                 if '1stimg_bckgd' in self.conf:
                     background = self.images[0]
@@ -439,8 +385,7 @@ class Prediction_Model(object):
         num_masks = self.conf['num_masks']
 
         if self.conf['model'] == 'DNA':
-            if num_masks != 1:
-                raise ValueError('Only one mask is supported for DNA model.')
+            raise NotImplementedError()
 
         # the total number of masks is num_masks +extra_masks because of background and generated pixels!
         masks = tf.reshape(
@@ -474,68 +419,6 @@ class Prediction_Model(object):
             pix_distrib_output += transf_distrib[i] * mask_list[i + extra_masks]
         pix_distrib_output /= tf.reduce_sum(pix_distrib_output, axis=(1, 2), keepdims=True)
         return pix_distrib_output
-
-    ## Utility functions
-    def stp_transformation(self, prev_image, stp_input, num_masks, reuse=None, suffix=None):
-        """Apply spatial transformer predictor (STP) to previous image.
-
-        Args:
-          prev_image: previous image to be transformed.
-          stp_input: hidden layer to be used for computing STN parameters.
-          num_masks: number of masks and hence the number of STP transformations.
-        Returns:
-          List of images transformed by the predicted STP parameters.
-        """
-        # Only import spatial transformer if needed.
-        # noinspection PyUnresolvedReferences
-        from spatial_transformer import transformer
-
-        identity_params = tf.convert_to_tensor(
-            np.array([1.0, 0.0, 0.0, 0.0, 1.0, 0.0], np.float32))
-        transformed = []
-        trafos = []
-        for i in range(num_masks):
-            params = slim.layers.fully_connected(
-                stp_input, 6, scope='stp_params' + str(i) + suffix,
-                activation_fn=None,
-                reuse=reuse) + identity_params
-            outsize = (prev_image.get_shape()[1], prev_image.get_shape()[2])
-            transformed.append(transformer(prev_image, params, outsize))
-            trafos.append(params)
-
-        return transformed, trafos
-
-    def dna_transformation(self, prev_image, dna_input, DNA_KERN_SIZE):
-        """Apply dynamic neural advection to previous image.
-
-        Args:
-          prev_image: previous image to be transformed.
-          dna_input: hidden lyaer to be used for computing DNA transformation.
-        Returns:
-          List of images transformed by the predicted CDNA kernels.
-        """
-        # Construct translated images.
-        pad_len = int(np.floor(DNA_KERN_SIZE / 2))
-        prev_image_pad = tf.pad(prev_image, [[0, 0], [pad_len, pad_len], [pad_len, pad_len], [0, 0]])
-        image_height = int(prev_image.get_shape()[1])
-        image_width = int(prev_image.get_shape()[2])
-
-        inputs = []
-        for xkern in range(DNA_KERN_SIZE):
-            for ykern in range(DNA_KERN_SIZE):
-                inputs.append(
-                    tf.expand_dims(
-                        tf.slice(prev_image_pad, [0, xkern, ykern, 0],
-                                 [-1, image_height, image_width, -1]), [3]))
-        inputs = tf.concat(axis=3, values=inputs)
-
-        # Normalize channels to 1.
-        kernel = tf.nn.relu(dna_input - RELU_SHIFT) + RELU_SHIFT
-        kernel = tf.expand_dims(
-            kernel / tf.reduce_sum(
-                kernel, [3], keepdims=True), [4])
-
-        return tf.reduce_sum(kernel * inputs, [3], keepdims=False)
 
     def cdna_transformation(self, prev_image, cdna_input, reuse_sc=None):
         """Apply convolutional dynamic neural advection to previous image.
@@ -628,8 +511,8 @@ def generator_fn(inputs, mode, hparams):
         'context_frames': hparams.context_frames,  # of frames before predictions.' ,
         'use_state': 1,  # 'Whether or not to give the state+action to the model' ,
         'ngf': hparams.ngf,
-        'model': hparams.transformation.upper(),  # 'model architecture to use - CDNA, DNA, or STP' ,
-        'num_masks': hparams.num_masks,  # 'number of masks, usually 1 for DNA, 10 for CDNA, STN.' ,
+        'model': hparams.transformation.upper(),  # 'model architecture to use - CDNA' ,
+        'num_masks': hparams.num_masks,  # 'number of masks, 10 for CDNA' ,
         'schedsamp_k': schedule_sampling_k,  # 'The k hyperparameter for scheduled sampling -1 for no scheduled sampling.' ,
         'kern_size': kern_size,  # size of DNA kerns
     }
