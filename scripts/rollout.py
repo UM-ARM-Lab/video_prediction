@@ -13,12 +13,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from colorama import Fore
 
+from visual_mpc import gui_tools
+
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=FutureWarning)
     import tensorflow as tf
 
 from video_prediction import load_data
-from video_prediction.model import visualize_image_rollout, build_model, build_placeholders
+from video_prediction.model import visualize_image_rollout, build_model, build_placeholders, visualize_pixel_rollout
 
 
 def main():
@@ -50,6 +52,7 @@ def main():
         random.seed(args.seed)
 
     context_states, context_images, actions = load_data(args.images, args.states, args.actions)
+    source_pixel = gui_tools.get_source_pixel(context_images[1])
 
     future_length, action_dim = actions.shape
     _, state_dim = context_states.shape
@@ -57,9 +60,11 @@ def main():
     total_length = context_length + future_length
     inputs_placeholders = build_placeholders(total_length, state_dim, action_dim, image_dim)
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=FutureWarning)
-        model = build_model(args.checkpoint, args.model, args.model_hparams, context_length, inputs_placeholders, total_length)
+    context_pixel_distribs = np.zeros((1, context_length, image_dim[0], image_dim[1], 1), dtype=np.float32)
+    # we only need on context pixel distrib
+    context_pixel_distribs[0, 1, source_pixel.row, source_pixel.col] = 1.0
+
+    model = build_model(args.checkpoint, args.model, args.model_hparams, context_length, inputs_placeholders, total_length)
 
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
     config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
@@ -70,26 +75,33 @@ def main():
 
     padded_context_states = np.zeros([1, total_length, state_dim], np.float32)
     padded_context_images = np.zeros([1, total_length, *image_dim], np.float32)
+    padded_context_pixel_distribs = np.zeros([1, total_length, image_dim[0], image_dim[1], 1], np.float32)
     padded_actions = np.zeros([1, total_length, action_dim], np.float32)
     padded_context_states[0, : context_length] = context_states
     padded_context_images[0, : context_length] = context_images
+    padded_context_pixel_distribs[0, : context_length] = context_pixel_distribs
     padded_actions[0, context_length - 1: -1] = actions
 
     feed_dict = {
         inputs_placeholders['states']: padded_context_states,
         inputs_placeholders['images']: padded_context_images,
         inputs_placeholders['actions']: padded_actions,
+        inputs_placeholders['pix_distribs']: padded_context_pixel_distribs,
     }
 
     fetches = OrderedDict({
         'gen_images': model.outputs['gen_images'],
         'gen_states': model.outputs['gen_states'],
+        'gen_pix_distribs': model.outputs['gen_pix_distribs'],
+        'pix_distribs': model.inputs['pix_distribs'],
         'input_images': model.inputs['images'],
         'input_states': model.inputs['states'],
     })
     results = sess.run(fetches, feed_dict=feed_dict)
 
-    _ = visualize_image_rollout(results, context_length, args)
+    handles = []
+    handles.extend(visualize_image_rollout(results, context_length, args))
+    handles.extend(visualize_pixel_rollout(results, context_length, source_pixel, args))
     plt.show()
 
 

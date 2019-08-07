@@ -76,6 +76,7 @@ def main():
     padded_context_images = np.zeros([1, total_length, args.s, args.s, 3], np.float32)
     padded_context_pixel_distribs = np.zeros([1, total_length, args.s, args.s, 1], np.float32)
     padded_actions = np.zeros([1, total_length, action_dim], np.float32)
+    padded_context_images[0, : context_length] = context_images
     padded_context_states[0, : context_length] = context_states
     padded_context_pixel_distribs[0, : context_length] = context_pixel_distribs
     padded_actions[0, context_length - 1: -1] = actions

@@ -47,7 +47,7 @@ class VisualPredictionModel:
 
         self.model.restore(self.sess, self.checkpoint)
 
-    def rollout_pixel_distributions(self, context_pixel_images, context_states, actions):
+    def rollout_all(self, context_images, context_pixel_images, context_states, actions):
         """
         Convert the data needed to make a prediction into a TensorFlow Dataset Iterator
         :param context_pixel_images: a numpy array [context_length, width, height, channels]
@@ -55,20 +55,22 @@ class VisualPredictionModel:
         :param actions: a numpy array [future_length, action_dimension]
         """
         padded_context_states = np.zeros([1, self.total_length, self.state_dim], np.float32)
-        nop_images = np.zeros([1, self.total_length, *self.image_dim], np.float32)
+        padded_context_images = np.zeros([1, self.total_length, *self.image_dim], np.float32)
         padded_context_pixel_images = np.zeros([1, self.total_length, self.h, self.w, 1], np.float32)
         padded_actions = np.zeros([1, self.total_length, self.action_dim], np.float32)
+        padded_context_images[0, : self.context_length] = context_images
         padded_context_states[0, : self.context_length] = context_states
         padded_context_pixel_images[0, : self.context_length] = context_pixel_images
         padded_actions[0, self.context_length - 1: -1] = actions
 
         feed_dict = {
             self.placeholders['states']: padded_context_states,
-            self.placeholders['images']: nop_images,
+            self.placeholders['images']: padded_context_images,
             self.placeholders['pix_distribs']: padded_context_pixel_images,
             self.placeholders['actions']: padded_actions,
         }
         fetches = OrderedDict({
+            'gen_images': self.model.outputs['gen_images'],
             'gen_pix_distribs': self.model.outputs['gen_pix_distribs'],
             'gen_states': self.model.outputs['gen_states'],
         })
@@ -77,8 +79,9 @@ class VisualPredictionModel:
         # 0 indexes the batch, which is always of size 1
         # time indexing here means that we include the last context image only
         gen_states = np.concatenate((context_states[[1]], results['gen_states'][0, self.context_length:]))
-        gen_images = np.concatenate((context_pixel_images[[1]], results['gen_pix_distribs'][0, self.context_length:]))
-        return gen_images, gen_states
+        gen_pix_images = np.concatenate((context_pixel_images[[1]], results['gen_pix_distribs'][0, self.context_length:]))
+        gen_images = np.concatenate((context_images[[1]], results['gen_images'][0, self.context_length:]))
+        return gen_pix_images, gen_images, gen_states
 
     def rollout(self, context_images, context_states, actions):
         """
@@ -168,6 +171,7 @@ def visualize_image_rollout(results, context_length, args, show_state=False):
     gen_states = results['gen_states'][0, context_length:]
 
     gen_images = np.concatenate((context_images, gen_images))
+
     # Plot trajectory in states space
     # FIXME: this assumes 2d state
     if show_state:
@@ -192,7 +196,7 @@ def visualize_image_rollout(results, context_length, args, show_state=False):
     anim = FuncAnimation(fig, image_update, frames=gen_images.shape[0], interval=1000 / args.fps, repeat=True)
     handles = [anim]
     writer = animation.writers['ffmpeg']
-    anim.save(os.path.join(args.results_dir, 'gen_images.gif'), writer=writer)
+    # anim.save(os.path.join(args.results_dir, 'gen_images.gif'), writer=writer, dpi=100)
 
     # Save individual frames of the prediction
     gen_image_filename_pattern = 'gen_image_%%05d_%%0%dd.png' % max(2, len(str(len(gen_images) - 1)))
@@ -204,7 +208,7 @@ def visualize_image_rollout(results, context_length, args, show_state=False):
 
 
 def visualize_pixel_rollout(results, context_length, source_pixel, args):
-    gen_pix_distribs = (results['gen_pix_distribs'][0, context_length:] * 255.0).astype(np.uint8)
+    gen_pix_distribs = (results['gen_pix_distribs'][0, 1:])
 
     fig, ax = plt.subplots()
     ax.set_title("prediction [pix distrib]")
@@ -212,18 +216,18 @@ def visualize_pixel_rollout(results, context_length, source_pixel, args):
     ax.scatter(source_pixel.col, source_pixel.row, c='r', marker='D', s=12)
 
     def pixel_update(t):
-        fixed_image = np.clip(gen_pix_distribs[t].squeeze(), 0, 255)
+        fixed_image = gen_pix_distribs[t].squeeze()
         pix_img.set_data(fixed_image)
 
     anim = FuncAnimation(fig, pixel_update, frames=gen_pix_distribs.shape[0], interval=1000 / args.fps, repeat=True)
     handles = [anim]
-    writer = animation.FFMpegWriter(extra_args=['-vcodec', 'libx264'], fps=args.fps)
-    anim.save(os.path.join(args.results_dir, 'gen_pix_distrib.gif'), writer=writer)
+    writer = animation.writers['ffmpeg']
+    # anim.save(os.path.join(args.results_dir, 'gen_pix_distrib.gif'), writer=writer, dpi=100)
 
     # Save individual frames of the prediction
-    gen_image_filename_pattern = 'gen_image_%%05d_%%0%dd.png' % max(2, len(str(len(gen_pix_distribs) - 1)))
-    for time_step_idx, gen_image in enumerate(gen_pix_distribs):
-        gen_image_filename = gen_image_filename_pattern % (time_step_idx, time_step_idx)
-        plt.imsave(os.path.join(args.results_dir, gen_image_filename), gen_image.squeeze())
+    gen_pix_distrib_filename_pattern = 'gen_pix_distrib_%%05d_%%0%dd.png' % max(2, len(str(len(gen_pix_distribs) - 1)))
+    for time_step_idx, gen_pix_distrib in enumerate(gen_pix_distribs):
+        gen_pix_distrib_filename = gen_pix_distrib_filename_pattern % (time_step_idx, time_step_idx)
+        plt.imsave(os.path.join(args.results_dir, gen_pix_distrib_filename), gen_pix_distrib.squeeze())
 
     return handles

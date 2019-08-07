@@ -126,6 +126,7 @@ class Prediction_Model(object):
         self.gen_masks = []
         self.gen_cdna_kernels = []
         self.gen_extra_image = None
+        self.gen_cdna_outputs = []
 
         self.moved_images = []
 
@@ -392,10 +393,11 @@ class Prediction_Model(object):
                 else:
                     background = prev_image
 
-                output, mask_list = self.fuse_trafos(enc6, background,
-                                                     transformed_l,
-                                                     scope='convt7_cam2',
-                                                     extra_masks=extra_masks)
+                output, mask_list, transformed_outputs = self.fuse_transformed_images(enc6, background,
+                                                                                      transformed_l,
+                                                                                      scope='convt7_cam2',
+                                                                                      extra_masks=extra_masks)
+                self.gen_cdna_outputs.append(transformed_outputs)
                 self.gen_images.append(output)
                 self.gen_masks.append(mask_list)
                 self.gen_cdna_kernels.append(cdna_kerns_summary)
@@ -428,7 +430,7 @@ class Prediction_Model(object):
 
                 self.gen_states.append(current_state)
 
-    def fuse_trafos(self, enc6, background_image, transformed, scope, extra_masks):
+    def fuse_transformed_images(self, enc6, background_image, transformed, scope, extra_masks):
         masks = slim.layers.conv2d_transpose(
             enc6, (self.conf['num_masks'] + extra_masks), 1, stride=1, activation_fn=None, scope=scope)
 
@@ -448,11 +450,13 @@ class Prediction_Model(object):
         output = mask_list[0] * background_image
 
         assert len(transformed) == len(mask_list[1:])
+        outputs = [output]
         # the same transformations are applied to all channels of the image
         for layer, mask in zip(transformed, mask_list[1:]):
+            outputs.append(layer * mask)
             output += layer * mask
 
-        return output, mask_list
+        return output, mask_list, outputs
 
     def fuse_pix_distrib(self, extra_masks, mask_list, pix_distributions, prev_pix_distrib,
                          transf_distrib):
@@ -644,6 +648,7 @@ def generator_fn(inputs, mode, hparams):
         'gen_masks': tf.stack(m.gen_masks, axis=1),
         'gen_cdna_kernels': tf.stack(m.gen_cdna_kernels, axis=0),
         'gen_extra_image': m.gen_extra_image,
+        'gen_cdna_outputs': tf.stack(m.gen_cdna_outputs, axis=1),
     }
     if 'pix_distribs' in inputs:
         outputs['gen_pix_distribs'] = tf.stack(m.gen_distrib1, axis=0)

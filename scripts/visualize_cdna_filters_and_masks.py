@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,7 +21,7 @@ def main():
     parser.add_argument("states", help='filename')
     parser.add_argument("actions", help='filename')
     parser.add_argument("checkpoint", help="directory with checkpoint or checkpoint name (e.g. checkpoint_dir/model-200000)")
-    parser.add_argument("--results_dir", default='results', help="ignored if output_gif_dir is specified")
+    parser.add_argument("--outdir", default='results', help="ignored if output_gif_dir is specified")
     parser.add_argument("--model", type=str, help="model class name")
     parser.add_argument("--model_hparams", type=str, help="a string of comma separated list of model hyperparameters")
     parser.add_argument("--fps", type=int, default=10)
@@ -69,56 +70,72 @@ def main():
 
     fetches = {
         'cdna_kernels': model.outputs['gen_cdna_kernels'],
+        'cdna_outputs': model.outputs['gen_cdna_outputs'],
         'masks': model.outputs['gen_masks'],
         'extra_image': model.outputs['gen_extra_image'],
     }
     results = sess.run(fetches, feed_dict=feed_dict)
     # time steps, 1, h, w, n_kernels, 1
     initial_kernels = results['cdna_kernels'][0, 0].squeeze()
+    initial_outputs = results['cdna_outputs'][0].squeeze()
     extra_image = results['extra_image'].squeeze()
     # time steps, n masks, 1, h, w, 1
     initial_masks = results['masks'][0].squeeze()
     initial_pixel_distrib = context_pixel_distribs[0, 0].squeeze()
     initial_image = context_images[1].squeeze()
 
-    plt.figure()
-    plt.title("initial image")
-    plt.imshow(initial_image)
-
-    plt.figure()
-    plt.title("initial pixel distrib")
-    plt.imshow(initial_pixel_distrib, cmap='rainbow')
-
+    n_outputs = initial_outputs.shape[0]
     n_kernels = initial_kernels.shape[-1]
-    fig, axes = plt.subplots(nrows=2, ncols=n_kernels)
+    fig, axes = plt.subplots(nrows=3, ncols=n_outputs)
+    for ax in axes.flatten():
+        ax.set_xticks([])
+        ax.set_yticks([])
+
     for i in range(n_kernels):
         kernel = initial_kernels[:, :, i]
         axes[0, i].set_title("kernel #{}".format(i))
+        # Don't set vmin/vmax here, we let matplotlib normalize these here since they only show relative "motion"
         axes[0, i].imshow(kernel, cmap='Blues')
-
-    plt.figure()
-    plt.title("initial image mask")
-    plt.imshow(initial_masks[0])
-
-    plt.figure()
-    plt.title("made-up image")
-    plt.imshow(extra_image)
-
-    plt.figure()
-    plt.title("made-up pixels mask")
-    plt.imshow(initial_masks[1], cmap='gray')
-
-    plt.figure()
-    plt.title("masked made up image")
-    plt.imshow(extra_image * np.expand_dims(initial_masks[1], axis=2))
+    axes[0, -1].set_title("made-up image")
+    axes[0, -1].imshow(extra_image, vmin=0, vmax=255)
 
     n_masks = initial_masks.shape[0]
     # the first mask is the one for the background image
-    # the second mask is the made-up pixels
+    # the second mask is the made-up 'extra' image
     for i in range(n_masks - 2):
         mask = initial_masks[i + 2]
         axes[1, i].set_title("mask #{}".format(i))
-        axes[1, i].imshow(mask, cmap='gray')
+        axes[1, i].imshow(mask, cmap='gray', vmin=0, vmax=1)
+    axes[1, -1].set_title("made-up image mask")
+    axes[1, -1].imshow(initial_masks[1], cmap='gray', vmin=0, vmax=1)
+
+    for i in range(n_outputs):
+        output = initial_outputs[i]
+        axes[2, i].set_title("transformed #{}".format(i))
+        axes[2, i].imshow(output)
+    axes[2, -1].set_title("made up transformed")
+    axes[2, -1].imshow(initial_outputs[-1])
+    plt.savefig(os.path.join(args.outdir, 'transformations.png'))
+
+    fig, axes = plt.subplots(nrows=2, ncols=3)
+    axes[0, 0].set_title("background image")
+    axes[0, 0].imshow(initial_image)
+
+    axes[0, 1].title("background image mask")
+    axes[0, 1].imshow(initial_masks[0], cmap='gray', vmin=0, vmax=1)
+
+    axes[0, 2].title("background image masked")
+    background_masked = initial_outputs[0]
+    axes[0, 2].imshow(background_masked, cmap='gray', vmin=0, vmax=1)
+
+    axes[0, 1].title("initial pixel distrib")
+    axes[0, 1].imshow(initial_pixel_distrib, cmap='rainbow', vmin=0, vmax=1)
+
+    axes[0, 2].title("made-up image")
+    axes[0, 2].imshow(extra_image, vmin=0, vmax=255)
+
+    axes[1, 2].title("masked made up image")
+    axes[1, 2].imshow(extra_image * np.expand_dims(initial_masks[1], axis=2), vmin=0, vmax=255)
 
     plt.show()
 
