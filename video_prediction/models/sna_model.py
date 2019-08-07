@@ -31,14 +31,7 @@ RELU_SHIFT = 1e-12
 
 
 @add_arg_scope
-def basic_conv_lstm_cell(inputs,
-                         state,
-                         num_channels,
-                         filter_size=5,
-                         forget_bias=1.0,
-                         scope=None,
-                         reuse=None,
-                         ):
+def basic_conv_lstm_cell(inputs, state, num_channels, filter_size=5, forget_bias=1.0, scope=None, reuse=None):
     """Basic LSTM recurrent network cell, with 2D convolution connctions.
     We add forget_bias (default: 1) to the biases of the forget gate in order to
     reduce the scale of forgetting in the beginning of the training.
@@ -99,18 +92,14 @@ class Prediction_Model(object):
         self.actions = actions
         self.iter_num = iter_num
         self.conf = conf
-        print(conf)
         self.images = images
-
-        self.cdna = True
 
         self.k = conf['schedsamp_k']
         self.use_state = conf['use_state']
         self.num_masks = conf['num_masks']
         self.context_frames = conf['context_frames']
 
-        self.batch_size, self.img_height, self.img_width, self.color_channels = [int(i) for i in
-                                                                                 images[0].get_shape()[0:4]]
+        self.batch_size, self.img_height, self.img_width, self.color_channels = [int(i) for i in images[0].get_shape()[0:4]]
         self.lstm_func = basic_conv_lstm_cell
 
         # Generated robot states and images.
@@ -142,23 +131,23 @@ class Prediction_Model(object):
         batch_size, img_height, img_width, color_channels = self.images[0].get_shape()[0:4]
         lstm_func = basic_conv_lstm_cell
 
-        if self.states != None:
+        if self.states is not None:
             current_state = self.states[0]
         else:
             current_state = None
 
-        if self.actions == None:
+        if self.actions is None:
             self.actions = [None for _ in self.images]
 
         if self.k == -1:
-            feedself = True
+            feed_self = True
         else:
             # Scheduled sampling:
             # Calculate number of ground-truth frames to pass in.
             # Inverse sigmoid decay
             num_ground_truth = tf.to_int32(
                 tf.round(tf.to_float(batch_size) * (self.k / (self.k + tf.exp(self.iter_num / self.k)))))
-            feedself = False
+            feed_self = False
 
         # LSTM state sizes and states.
 
@@ -177,26 +166,23 @@ class Prediction_Model(object):
             reuse = bool(self.gen_images)
 
             done_warm_start = len(self.gen_images) > self.context_frames - 1
-            with slim.arg_scope(
-                    [lstm_func, slim.layers.conv2d, slim.layers.fully_connected,
-                     tf_layers.layer_norm, slim.layers.conv2d_transpose],
-                    reuse=reuse):
+            with slim.arg_scope([lstm_func, slim.layers.conv2d, slim.layers.fully_connected, tf_layers.layer_norm,
+                                 slim.layers.conv2d_transpose], reuse=reuse):
 
-                if feedself and done_warm_start:
+                if feed_self and done_warm_start:
                     # Feed in generated image.
                     prev_image = self.gen_images[-1]  # 64x64x6
-                    if self.pix_distributions1 != None:
+                    if self.pix_distributions1 is not None:
                         prev_pix_distrib1 = self.gen_distrib1[-1]
                         if 'ndesig' in self.conf:
                             prev_pix_distrib2 = self.gen_distrib2[-1]
                 elif done_warm_start:
                     # Scheduled sampling
-                    prev_image = scheduled_sample(self.images[t], self.gen_images[-1], batch_size,
-                                                  num_ground_truth)
+                    prev_image = scheduled_sample(self.images[t], self.gen_images[-1], batch_size, num_ground_truth)
                 else:
                     # Always feed in ground_truth
                     prev_image = self.images[t]
-                    if self.pix_distributions1 != None:
+                    if self.pix_distributions1 is not None:
                         prev_pix_distrib1 = self.pix_distributions1[t]
                         if 'ndesig' in self.conf:
                             prev_pix_distrib2 = self.pix_distributions2[t]
@@ -214,82 +200,12 @@ class Prediction_Model(object):
                 if not 'ignore_state_action' in self.conf:
                     state_action = tf.concat(axis=1, values=[action, current_state])
 
-                enc0 = slim.layers.conv2d(  # 32x32x32
-                    input_image,
-                    32, [5, 5],
-                    stride=2,
-                    scope='scale1_conv1',
-                    normalizer_fn=tf_layers.layer_norm,
-                    normalizer_params={'scope': 'layer_norm1'})
-
-                hidden1, lstm_state1 = lstm_func(  # 32x32x16
-                    enc0, lstm_state1, lstm_size[0], scope='state1')
-                hidden1 = tf_layers.layer_norm(hidden1, scope='layer_norm2')
-
-                enc1 = slim.layers.conv2d(  # 16x16x16
-                    hidden1, hidden1.get_shape()[3], [3, 3], stride=2, scope='conv2')
-
-                hidden3, lstm_state3 = lstm_func(  # 16x16x32
-                    enc1, lstm_state3, lstm_size[1], scope='state3')
-                hidden3 = tf_layers.layer_norm(hidden3, scope='layer_norm4')
-
-                enc2 = slim.layers.conv2d(  # 8x8x32
-                    hidden3, hidden3.get_shape()[3], [3, 3], stride=2, scope='conv3')
-
-                if not 'ignore_state_action' in self.conf:
-                    # Pass in state and action.
-                    if 'ignore_state' in self.conf:
-                        lowdim = action
-                        print('ignoring state')
-                    else:
-                        lowdim = state_action
-
-                    smear = tf.reshape(
-                        lowdim,
-                        [int(batch_size), 1, 1, int(lowdim.get_shape()[1])])
-                    smear = tf.tile(
-                        smear, [1, int(enc2.get_shape()[1]), int(enc2.get_shape()[2]), 1])
-
-                    enc2 = tf.concat(axis=3, values=[enc2, smear])
-                else:
-                    print('ignoring states and actions')
-
-                enc3 = slim.layers.conv2d(  # 8x8x32
-                    enc2, hidden3.get_shape()[3], [1, 1], stride=1, scope='conv4')
-
-                hidden5, lstm_state5 = lstm_func(  # 8x8x64
-                    enc3, lstm_state5, lstm_size[2], scope='state5')
-                hidden5 = tf_layers.layer_norm(hidden5, scope='layer_norm6')
-                enc4 = slim.layers.conv2d_transpose(  # 16x16x64
-                    hidden5, hidden5.get_shape()[3], 3, stride=2, scope='convt1')
-
-                hidden6, lstm_state6 = lstm_func(  # 16x16x32
-                    enc4, lstm_state6, lstm_size[3], scope='state6')
-                hidden6 = tf_layers.layer_norm(hidden6, scope='layer_norm7')
-
-                if 'noskip' not in self.conf:
-                    # Skip connection.
-                    hidden6 = tf.concat(axis=3, values=[hidden6, enc1])  # both 16x16
-
-                enc5 = slim.layers.conv2d_transpose(  # 32x32x32
-                    hidden6, hidden6.get_shape()[3], 3, stride=2, scope='convt2')
-                hidden7, lstm_state7 = lstm_func(  # 32x32x16
-                    enc5, lstm_state7, lstm_size[4], scope='state7')
-                hidden7 = tf_layers.layer_norm(hidden7, scope='layer_norm8')
-
-                if not 'noskip' in self.conf:
-                    # Skip connection.
-                    hidden7 = tf.concat(axis=3, values=[hidden7, enc0])  # both 32x32
-
-                enc6 = slim.layers.conv2d_transpose(  # 64x64x16
-                    hidden7,
-                    hidden7.get_shape()[3], 3, stride=2, scope='convt3',
-                    normalizer_fn=tf_layers.layer_norm,
-                    normalizer_params={'scope': 'layer_norm9'})
+                enc6, hidden5 = self.encoder_decoder_fn(action, batch_size, input_image, lstm_func, lstm_size, lstm_state1,
+                                                        lstm_state3, lstm_state5, lstm_state6, lstm_state7, state_action)
 
                 if 'transform_from_firstimage' in self.conf:
                     prev_image = self.images[1]
-                    if self.pix_distributions1 != None:
+                    if self.pix_distributions1 is not None:
                         prev_pix_distrib1 = self.pix_distributions1[1]
                         prev_pix_distrib1 = tf.expand_dims(prev_pix_distrib1, -1)
                     print('transform from image 1')
@@ -300,8 +216,7 @@ class Prediction_Model(object):
                 if self.conf['model'] == 'CDNA':
                     if 'gen_pix' in self.conf:
                         # Using largest hidden state for predicting a new image layer.
-                        enc7 = slim.layers.conv2d_transpose(
-                            enc6, color_channels, 1, stride=1, scope='convt4', activation_fn=None)
+                        enc7 = slim.layers.conv2d_transpose(enc6, color_channels, 1, stride=1, scope='convt4', activation_fn=None)
                         # This allows the network to also generate one image from scratch,
                         # which is useful when regions of the image become unoccluded.
                         self.gen_extra_image = tf.nn.sigmoid(enc7)
@@ -312,29 +227,22 @@ class Prediction_Model(object):
                         extra_masks = 1
 
                     cdna_input = tf.reshape(hidden5, [int(batch_size), -1])
-                    new_transformed, cdna_kerns_summary = self.cdna_transformation(prev_image,
-                                                                                   cdna_input,
-                                                                                   reuse_sc=reuse)
+                    new_transformed, cdna_kerns = self.cdna_transformation(prev_image, cdna_input, reuse_sc=reuse)
                     transformed_l += new_transformed
                     self.moved_images.append(transformed_l)
 
-                    if self.pix_distributions1 != None:
-                        transf_distrib_ndesig1, _ = self.cdna_transformation(prev_pix_distrib1,
-                                                                             cdna_input,
-                                                                             reuse_sc=True)
+                    if self.pix_distributions1 is not None:
+                        transf_distrib_ndesig1, _ = self.cdna_transformation(prev_pix_distrib1, cdna_input, reuse_sc=True)
                         self.moved_pix_distrib1.append(transf_distrib_ndesig1)
                         if 'ndesig' in self.conf:
-                            transf_distrib_ndesig2, _ = self.cdna_transformation(
-                                prev_pix_distrib2,
-                                cdna_input,
-                                reuse_sc=True)
+                            transf_distrib_ndesig2, _ = self.cdna_transformation(prev_pix_distrib2, cdna_input, reuse_sc=True)
 
                             self.moved_pix_distrib2.append(transf_distrib_ndesig2)
 
                 if self.conf['model'] == 'STP':
                     raise NotImplementedError()
 
-                if '1stimg_bckgd' in self.conf:
+                if 'first_image_background' in self.conf:
                     background = self.images[0]
                 else:
                     background = prev_image
@@ -346,9 +254,9 @@ class Prediction_Model(object):
                 self.gen_cdna_outputs.append(transformed_outputs)
                 self.gen_images.append(output)
                 self.gen_masks.append(mask_list)
-                self.gen_cdna_kernels.append(cdna_kerns_summary)
+                self.gen_cdna_kernels.append(cdna_kerns)
 
-                if self.pix_distributions1 != None:
+                if self.pix_distributions1 is not None:
                     pix_distrib_output = self.fuse_pix_distrib(extra_masks,
                                                                mask_list,
                                                                self.pix_distributions1,
@@ -356,6 +264,8 @@ class Prediction_Model(object):
                                                                transf_distrib_ndesig1)
 
                     self.gen_distrib1.append(pix_distrib_output)
+                    # ndeign means there are two "designated" source/target pixel pairs
+                    # this code base only supports one or two pixel pairs
                     if 'ndesig' in self.conf:
                         pix_distrib_output = self.fuse_pix_distrib(extra_masks,
                                                                    mask_list,
@@ -376,9 +286,78 @@ class Prediction_Model(object):
 
                 self.gen_states.append(current_state)
 
+    def encoder_decoder_fn(self, action, batch_size, input_image, lstm_func, lstm_size, lstm_state1, lstm_state3, lstm_state5,
+                           lstm_state6, lstm_state7, state_action):
+        """
+        :return:
+            enc6: the representation use to construct the masks
+            hidden5: the representation use to construct the CDNA kernels
+        """
+        enc0 = slim.layers.conv2d(  # 32x32x32
+            input_image,
+            32, [5, 5],
+            stride=2,
+            scope='scale1_conv1',
+            normalizer_fn=tf_layers.layer_norm,
+            normalizer_params={'scope': 'layer_norm1'})
+        hidden1, lstm_state1 = lstm_func(  # 32x32x16
+            enc0, lstm_state1, lstm_size[0], scope='state1')
+        hidden1 = tf_layers.layer_norm(hidden1, scope='layer_norm2')
+        enc1 = slim.layers.conv2d(  # 16x16x16
+            hidden1, hidden1.get_shape()[3], [3, 3], stride=2, scope='conv2')
+        hidden3, lstm_state3 = lstm_func(  # 16x16x32
+            enc1, lstm_state3, lstm_size[1], scope='state3')
+        hidden3 = tf_layers.layer_norm(hidden3, scope='layer_norm4')
+        enc2 = slim.layers.conv2d(  # 8x8x32
+            hidden3, hidden3.get_shape()[3], [3, 3], stride=2, scope='conv3')
+        if not 'ignore_state_action' in self.conf:
+            # Pass in state and action.
+            if 'ignore_state' in self.conf:
+                lowdim = action
+                print('ignoring state')
+            else:
+                lowdim = state_action
+
+            smear = tf.reshape(
+                lowdim,
+                [int(batch_size), 1, 1, int(lowdim.get_shape()[1])])
+            smear = tf.tile(
+                smear, [1, int(enc2.get_shape()[1]), int(enc2.get_shape()[2]), 1])
+
+            enc2 = tf.concat(axis=3, values=[enc2, smear])
+        else:
+            print('ignoring states and actions')
+        enc3 = slim.layers.conv2d(  # 8x8x32
+            enc2, hidden3.get_shape()[3], [1, 1], stride=1, scope='conv4')
+        hidden5, lstm_state5 = lstm_func(  # 8x8x64
+            enc3, lstm_state5, lstm_size[2], scope='state5')
+        hidden5 = tf_layers.layer_norm(hidden5, scope='layer_norm6')
+        enc4 = slim.layers.conv2d_transpose(  # 16x16x64
+            hidden5, hidden5.get_shape()[3], 3, stride=2, scope='convt1')
+        hidden6, lstm_state6 = lstm_func(  # 16x16x32
+            enc4, lstm_state6, lstm_size[3], scope='state6')
+        hidden6 = tf_layers.layer_norm(hidden6, scope='layer_norm7')
+        if 'noskip' not in self.conf:
+            # Skip connection.
+            hidden6 = tf.concat(axis=3, values=[hidden6, enc1])  # both 16x16
+        enc5 = slim.layers.conv2d_transpose(  # 32x32x32
+            hidden6, hidden6.get_shape()[3], 3, stride=2, scope='convt2')
+        hidden7, lstm_state7 = lstm_func(  # 32x32x16
+            enc5, lstm_state7, lstm_size[4], scope='state7')
+        hidden7 = tf_layers.layer_norm(hidden7, scope='layer_norm8')
+        if not 'noskip' in self.conf:
+            # Skip connection.
+            hidden7 = tf.concat(axis=3, values=[hidden7, enc0])  # both 32x32
+        enc6 = slim.layers.conv2d_transpose(  # 64x64x16
+            hidden7,
+            hidden7.get_shape()[3], 3, stride=2, scope='convt3',
+            normalizer_fn=tf_layers.layer_norm,
+            normalizer_params={'scope': 'layer_norm9'})
+        return enc6, hidden5
+
     def fuse_transformed_images(self, enc6, background_image, transformed, scope, extra_masks):
-        masks = slim.layers.conv2d_transpose(
-            enc6, (self.conf['num_masks'] + extra_masks), 1, stride=1, activation_fn=None, scope=scope)
+        masks = slim.layers.conv2d_transpose(enc6, (self.conf['num_masks'] + extra_masks), 1, stride=1, activation_fn=None,
+                                             scope=scope)
 
         img_height = 64
         img_width = 64
@@ -403,22 +382,26 @@ class Prediction_Model(object):
 
         return output, mask_list, outputs
 
-    def fuse_pix_distrib(self, extra_masks, mask_list, pix_distributions, prev_pix_distrib,
-                         transf_distrib):
+    def fuse_pix_distrib(self, extra_masks, mask_list, pix_distributions, prev_pix_distrib, transformed_pix_distrib):
 
-        if '1stimg_bckgd' in self.conf:
+        if 'first_image_background' in self.conf:
             background_pix = pix_distributions[0]
             if len(background_pix.get_shape()) == 3:
                 background_pix = tf.expand_dims(background_pix, -1)
         else:
             background_pix = prev_pix_distrib
         pix_distrib_output = mask_list[0] * background_pix
+        pix_distrib_outputs = [pix_distrib_output]
         if 'gen_pix' in self.conf:
-            pix_distrib_output += mask_list[1] * prev_pix_distrib  # assume pixels don't when image is generated from scratch
+            gen_pix_masked = mask_list[1] * prev_pix_distrib  # assume pixels don't when image is generated from scratch
+            pix_distrib_outputs.append(gen_pix_masked)
+            pix_distrib_output += gen_pix_masked
         for i in range(self.num_masks):
-            pix_distrib_output += transf_distrib[i] * mask_list[i + extra_masks]
+            transformed_distrib_masked = transformed_pix_distrib[i] * mask_list[i + extra_masks]
+            pix_distrib_outputs.append(transformed_distrib_masked)
+            pix_distrib_output += transformed_distrib_masked
         pix_distrib_output /= tf.reduce_sum(pix_distrib_output, axis=(1, 2), keepdims=True)
-        return pix_distrib_output
+        return pix_distrib_output, pix_distrib_outputs
 
     def cdna_transformation(self, prev_image, cdna_input, reuse_sc=None):
         """Apply convolutional dynamic neural advection to previous image.
@@ -453,7 +436,7 @@ class Prediction_Model(object):
         cdna_kerns = tf.nn.relu(cdna_kerns - RELU_SHIFT) + RELU_SHIFT
         norm_factor = tf.reduce_sum(cdna_kerns, [1, 2, 3], keepdims=True)
         cdna_kerns /= norm_factor
-        cdna_kerns_summary = cdna_kerns
+        cdna_kerns_out = cdna_kerns
 
         # Transpose and reshape.
         cdna_kerns = tf.transpose(cdna_kerns, [1, 2, 0, 4, 3])
@@ -467,7 +450,7 @@ class Prediction_Model(object):
         transformed = tf.transpose(transformed, [3, 1, 2, 0, 4])
         transformed = tf.unstack(value=transformed, axis=-1)
 
-        return transformed, cdna_kerns_summary
+        return transformed, cdna_kerns_out
 
 
 def scheduled_sample(ground_truth_x, generated_x, batch_size, num_ground_truth):
@@ -517,7 +500,7 @@ def generator_fn(inputs, mode, hparams):
         'kern_size': kern_size,  # size of DNA kerns
     }
     if hparams.first_image_background:
-        conf['1stimg_bckgd'] = ''
+        conf['first_image_background'] = ''
     if hparams.generate_scratch_image:
         conf['gen_pix'] = ''
 

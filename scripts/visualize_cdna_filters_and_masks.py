@@ -118,23 +118,26 @@ def main():
     plt.savefig(os.path.join(args.outdir, 'transformations.png'))
 
     fig, axes = plt.subplots(nrows=2, ncols=3)
-    axes[0, 0].set_title("background image")
+    axes[0, 0].set_title("untransformed background image")
     axes[0, 0].imshow(initial_image)
-
-    axes[0, 1].title("background image mask")
+    axes[0, 1].title("background mask")
     axes[0, 1].imshow(initial_masks[0], cmap='gray', vmin=0, vmax=1)
+    axes[0, 2].title("background image, transformed then masked")
+    background_image_masked = initial_outputs[0]
+    axes[0, 2].imshow(background_image_masked, cmap='gray', vmin=0, vmax=1)
 
-    axes[0, 2].title("background image masked")
-    background_masked = initial_outputs[0]
-    axes[0, 2].imshow(background_masked, cmap='gray', vmin=0, vmax=1)
+    axes[1, 0].set_title("background pixel distrib")
+    axes[1, 0].imshow(initial_pixel_distrib, cmap='rainbow', vmin=0, vmax=1)
+    axes[1, 1].set_title("background mask")
+    axes[1, 1].imshow(initial_masks[0], cmap='gray', vmin=0, vmax=1)
+    axes[0, 2].set_title("background pixel distrib masked")
+    background_pix_masked = initial_outputs[0]
+    axes[0, 2].imshow(background_pix_masked, cmap='gray', vmin=0, vmax=1)
 
-    axes[0, 1].title("initial pixel distrib")
-    axes[0, 1].imshow(initial_pixel_distrib, cmap='rainbow', vmin=0, vmax=1)
-
-    axes[0, 2].title("made-up image")
+    axes[0, 2].set_title("made-up image")
     axes[0, 2].imshow(extra_image, vmin=0, vmax=255)
 
-    axes[1, 2].title("masked made up image")
+    axes[1, 2].set_title("masked made up image")
     axes[1, 2].imshow(extra_image * np.expand_dims(initial_masks[1], axis=2), vmin=0, vmax=255)
 
     plt.show()
