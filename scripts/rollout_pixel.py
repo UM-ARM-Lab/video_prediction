@@ -6,20 +6,15 @@ from __future__ import print_function
 import argparse
 import os
 import random
-import warnings
 from collections import OrderedDict
 
 import matplotlib.pyplot as plt
 import numpy as np
+import tensorflow as tf
 from colorama import Fore
 
-from visual_mpc.numpy_point import NumpyPoint
-
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=FutureWarning)
-    import tensorflow as tf
-
 from video_prediction.model import visualize_pixel_rollout, build_model, build_placeholders
+from visual_mpc.numpy_point import NumpyPoint
 
 
 def main():
@@ -61,8 +56,6 @@ def main():
     vx, vy = actions[0]
     dt = 1.0
     context_states = (np.array([[args.col, args.row], [args.col + dt * vx / res[0], args.row + dt * vy / res[0]]]) - origin) * res
-    print(context_states)
-    return
 
     future_length, action_dim = actions.shape
     _, state_dim = context_states.shape
@@ -70,9 +63,7 @@ def main():
     total_length = context_length + future_length
     inputs_placeholders = build_placeholders(total_length, state_dim, action_dim, image_dim)
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=FutureWarning)
-        model = build_model(args.checkpoint, args.model, args.model_hparams, context_length, inputs_placeholders, total_length)
+    model = build_model(args.checkpoint, args.model, args.model_hparams, context_length, inputs_placeholders, total_length)
 
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
     config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)

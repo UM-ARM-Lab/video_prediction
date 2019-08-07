@@ -26,7 +26,6 @@ from tensorflow.contrib.slim import layers
 
 from video_prediction.models import VideoPredictionModel
 
-
 # Amount to use when lower bounding tensors
 RELU_SHIFT = 1e-12
 
@@ -63,7 +62,6 @@ def basic_conv_lstm_cell(inputs,
                            'BasicConvLstmCell',
                            [inputs, state],
                            reuse=reuse):
-
         inputs.get_shape().assert_has_rank(4)
         state.get_shape().assert_has_rank(4)
         c, h = tf.split(axis=3, num_or_size_splits=2, value=state)
@@ -126,6 +124,8 @@ class Prediction_Model(object):
         self.gen_states = []
         self.gen_images = []
         self.gen_masks = []
+        self.gen_cdna_kernels = []
+        self.gen_extra_image = None
 
         self.moved_images = []
 
@@ -147,7 +147,6 @@ class Prediction_Model(object):
 
         batch_size, img_height, img_width, color_channels = self.images[0].get_shape()[0:4]
         lstm_func = basic_conv_lstm_cell
-
 
         if self.states != None:
             current_state = self.states[0]
@@ -176,7 +175,6 @@ class Prediction_Model(object):
             ngf = self.conf['ngf']
             lstm_size = np.int32(np.array([ngf, ngf * 2, ngf * 4, ngf * 2, ngf]))
 
-
         lstm_state1, lstm_state2, lstm_state3, lstm_state4 = None, None, None, None
         lstm_state5, lstm_state6, lstm_state7 = None, None, None
 
@@ -192,7 +190,7 @@ class Prediction_Model(object):
 
                 if feedself and done_warm_start:
                     # Feed in generated image.
-                    prev_image = self.gen_images[-1]             # 64x64x6
+                    prev_image = self.gen_images[-1]  # 64x64x6
                     if self.pix_distributions1 != None:
                         prev_pix_distrib1 = self.gen_distrib1[-1]
                         if 'ndesig' in self.conf:
@@ -214,7 +212,7 @@ class Prediction_Model(object):
                                 prev_pix_distrib2 = tf.expand_dims(prev_pix_distrib2, -1)
 
                 if 'refeed_firstimage' in self.conf:
-                    assert self.conf['model']=='STP'
+                    assert self.conf['model'] == 'STP'
                     if t > 1:
                         input_image = self.images[1]
                         print('refeed with image 1')
@@ -227,7 +225,7 @@ class Prediction_Model(object):
                 if not 'ignore_state_action' in self.conf:
                     state_action = tf.concat(axis=1, values=[action, current_state])
 
-                enc0 = slim.layers.conv2d(    #32x32x32
+                enc0 = slim.layers.conv2d(  # 32x32x32
                     input_image,
                     32, [5, 5],
                     stride=2,
@@ -235,14 +233,14 @@ class Prediction_Model(object):
                     normalizer_fn=tf_layers.layer_norm,
                     normalizer_params={'scope': 'layer_norm1'})
 
-                hidden1, lstm_state1 = lstm_func(       # 32x32x16
+                hidden1, lstm_state1 = lstm_func(  # 32x32x16
                     enc0, lstm_state1, lstm_size[0], scope='state1')
                 hidden1 = tf_layers.layer_norm(hidden1, scope='layer_norm2')
 
-                enc1 = slim.layers.conv2d(     # 16x16x16
+                enc1 = slim.layers.conv2d(  # 16x16x16
                     hidden1, hidden1.get_shape()[3], [3, 3], stride=2, scope='conv2')
 
-                hidden3, lstm_state3 = lstm_func(   #16x16x32
+                hidden3, lstm_state3 = lstm_func(  # 16x16x32
                     enc1, lstm_state3, lstm_size[1], scope='state3')
                 hidden3 = tf_layers.layer_norm(hidden3, scope='layer_norm4')
 
@@ -267,16 +265,16 @@ class Prediction_Model(object):
                 else:
                     print('ignoring states and actions')
 
-                enc3 = slim.layers.conv2d(   #8x8x32
+                enc3 = slim.layers.conv2d(  # 8x8x32
                     enc2, hidden3.get_shape()[3], [1, 1], stride=1, scope='conv4')
 
-                hidden5, lstm_state5 = lstm_func(  #8x8x64
+                hidden5, lstm_state5 = lstm_func(  # 8x8x64
                     enc3, lstm_state5, lstm_size[2], scope='state5')
                 hidden5 = tf_layers.layer_norm(hidden5, scope='layer_norm6')
-                enc4 = slim.layers.conv2d_transpose(  #16x16x64
+                enc4 = slim.layers.conv2d_transpose(  # 16x16x64
                     hidden5, hidden5.get_shape()[3], 3, stride=2, scope='convt1')
 
-                hidden6, lstm_state6 = lstm_func(  #16x16x32
+                hidden6, lstm_state6 = lstm_func(  # 16x16x32
                     enc4, lstm_state6, lstm_size[3], scope='state6')
                 hidden6 = tf_layers.layer_norm(hidden6, scope='layer_norm7')
 
@@ -284,9 +282,9 @@ class Prediction_Model(object):
                     # Skip connection.
                     hidden6 = tf.concat(axis=3, values=[hidden6, enc1])  # both 16x16
 
-                enc5 = slim.layers.conv2d_transpose(  #32x32x32
+                enc5 = slim.layers.conv2d_transpose(  # 32x32x32
                     hidden6, hidden6.get_shape()[3], 3, stride=2, scope='convt2')
-                hidden7, lstm_state7 = lstm_func( # 32x32x16
+                hidden7, lstm_state7 = lstm_func(  # 32x32x16
                     enc5, lstm_state7, lstm_size[4], scope='state7')
                 hidden7 = tf_layers.layer_norm(hidden7, scope='layer_norm8')
 
@@ -294,7 +292,7 @@ class Prediction_Model(object):
                     # Skip connection.
                     hidden7 = tf.concat(axis=3, values=[hidden7, enc0])  # both 32x32
 
-                enc6 = slim.layers.conv2d_transpose(   # 64x64x16
+                enc6 = slim.layers.conv2d_transpose(  # 64x64x16
                     hidden7,
                     hidden7.get_shape()[3], 3, stride=2, scope='convt3',
                     normalizer_fn=tf_layers.layer_norm,
@@ -319,7 +317,6 @@ class Prediction_Model(object):
                             transf_distrib_ndesig2 = [
                                 self.dna_transformation(prev_pix_distrib2, trafo_input, KERN_SIZE)]
 
-
                     extra_masks = 1  ## extra_masks = 2 is needed for running singleview_shifted!!
                     # extra_masks = 2
 
@@ -330,38 +327,40 @@ class Prediction_Model(object):
                             enc6, color_channels, 1, stride=1, scope='convt4', activation_fn=None)
                         # This allows the network to also generate one image from scratch,
                         # which is useful when regions of the image become unoccluded.
-                        transformed_l = [tf.nn.sigmoid(enc7)]
+                        self.gen_extra_image = tf.nn.sigmoid(enc7)
+                        transformed_l = [self.gen_extra_image]
                         extra_masks = 2
                     else:
                         transformed_l = []
                         extra_masks = 1
 
                     cdna_input = tf.reshape(hidden5, [int(batch_size), -1])
-                    new_transformed, _ = self.cdna_transformation(prev_image,
-                                                            cdna_input,
-                                                            reuse_sc=reuse)
+                    new_transformed, cdna_kerns_summary = self.cdna_transformation(prev_image,
+                                                                                   cdna_input,
+                                                                                   reuse_sc=reuse)
                     transformed_l += new_transformed
                     self.moved_images.append(transformed_l)
 
                     if self.pix_distributions1 != None:
                         transf_distrib_ndesig1, _ = self.cdna_transformation(prev_pix_distrib1,
-                                                                       cdna_input,
-                                                                         reuse_sc=True)
+                                                                             cdna_input,
+                                                                             reuse_sc=True)
                         self.moved_pix_distrib1.append(transf_distrib_ndesig1)
                         if 'ndesig' in self.conf:
                             transf_distrib_ndesig2, _ = self.cdna_transformation(
-                                                                               prev_pix_distrib2,
-                                                                               cdna_input,
-                                                                               reuse_sc=True)
+                                prev_pix_distrib2,
+                                cdna_input,
+                                reuse_sc=True)
 
                             self.moved_pix_distrib2.append(transf_distrib_ndesig2)
 
                 if self.conf['model'] == 'STP':
-                    enc7 = slim.layers.conv2d_transpose(enc6, color_channels, 1, stride=1, scope='convt5', activation_fn= None)
+                    enc7 = slim.layers.conv2d_transpose(enc6, color_channels, 1, stride=1, scope='convt5', activation_fn=None)
                     # This allows the network to also generate one image from scratch,
                     # which is useful when regions of the image become unoccluded.
                     if 'gen_pix' in self.conf:
-                        transformed_l = [tf.nn.sigmoid(enc7)]
+                        self.gen_extra_image = tf.nn.sigmoid(enc7)
+                        transformed_l = [self.gen_extra_image]
                         extra_masks = 2
                     else:
                         transformed_l = []
@@ -384,33 +383,37 @@ class Prediction_Model(object):
                     self.moved_images.append(transformed_l)
 
                     if self.pix_distributions1 != None:
-                        transf_distrib_ndesig1, _ = self.stp_transformation(prev_pix_distrib1, stp_input, suffix='cam2', reuse=True)
+                        transf_distrib_ndesig1, _ = self.stp_transformation(prev_pix_distrib1, stp_input, suffix='cam2',
+                                                                            reuse=True)
                         self.moved_pix_distrib1.append(transf_distrib_ndesig1)
 
                 if '1stimg_bckgd' in self.conf:
                     background = self.images[0]
-                else: background = prev_image
+                else:
+                    background = prev_image
+
                 output, mask_list = self.fuse_trafos(enc6, background,
                                                      transformed_l,
                                                      scope='convt7_cam2',
-                                                     extra_masks= extra_masks)
+                                                     extra_masks=extra_masks)
                 self.gen_images.append(output)
                 self.gen_masks.append(mask_list)
+                self.gen_cdna_kernels.append(cdna_kerns_summary)
 
-                if self.pix_distributions1!=None:
+                if self.pix_distributions1 != None:
                     pix_distrib_output = self.fuse_pix_distrib(extra_masks,
-                                                                mask_list,
-                                                                self.pix_distributions1,
-                                                                prev_pix_distrib1,
-                                                                transf_distrib_ndesig1)
+                                                               mask_list,
+                                                               self.pix_distributions1,
+                                                               prev_pix_distrib1,
+                                                               transf_distrib_ndesig1)
 
                     self.gen_distrib1.append(pix_distrib_output)
                     if 'ndesig' in self.conf:
                         pix_distrib_output = self.fuse_pix_distrib(extra_masks,
-                                                                    mask_list,
-                                                                    self.pix_distributions2,
-                                                                    prev_pix_distrib2,
-                                                                    transf_distrib_ndesig2)
+                                                                   mask_list,
+                                                                   self.pix_distributions2,
+                                                                   prev_pix_distrib2,
+                                                                   transf_distrib_ndesig2)
 
                         self.gen_distrib2.append(pix_distrib_output)
 
@@ -427,24 +430,25 @@ class Prediction_Model(object):
 
     def fuse_trafos(self, enc6, background_image, transformed, scope, extra_masks):
         masks = slim.layers.conv2d_transpose(
-            enc6, (self.conf['num_masks']+ extra_masks), 1, stride=1, activation_fn=None, scope=scope)
+            enc6, (self.conf['num_masks'] + extra_masks), 1, stride=1, activation_fn=None, scope=scope)
 
         img_height = 64
         img_width = 64
         num_masks = self.conf['num_masks']
 
-        if self.conf['model']=='DNA':
+        if self.conf['model'] == 'DNA':
             if num_masks != 1:
                 raise ValueError('Only one mask is supported for DNA model.')
 
         # the total number of masks is num_masks +extra_masks because of background and generated pixels!
         masks = tf.reshape(
-            tf.nn.softmax(tf.reshape(masks, [-1, num_masks +extra_masks])),
-            [int(self.batch_size), int(img_height), int(img_width), num_masks +extra_masks])
-        mask_list = tf.split(axis=3, num_or_size_splits=num_masks +extra_masks, value=masks)
+            tf.nn.softmax(tf.reshape(masks, [-1, num_masks + extra_masks])),
+            [int(self.batch_size), int(img_height), int(img_width), num_masks + extra_masks])
+        mask_list = tf.split(axis=3, num_or_size_splits=num_masks + extra_masks, value=masks)
         output = mask_list[0] * background_image
 
         assert len(transformed) == len(mask_list[1:])
+        # the same transformations are applied to all channels of the image
         for layer, mask in zip(transformed, mask_list[1:]):
             output += layer * mask
 
@@ -468,7 +472,7 @@ class Prediction_Model(object):
         return pix_distrib_output
 
     ## Utility functions
-    def stp_transformation(self, prev_image, stp_input, num_masks, reuse= None, suffix = None):
+    def stp_transformation(self, prev_image, stp_input, num_masks, reuse=None, suffix=None):
         """Apply spatial transformer predictor (STP) to previous image.
 
         Args:
@@ -479,6 +483,7 @@ class Prediction_Model(object):
           List of images transformed by the predicted STP parameters.
         """
         # Only import spatial transformer if needed.
+        # noinspection PyUnresolvedReferences
         from spatial_transformer import transformer
 
         identity_params = tf.convert_to_tensor(
@@ -489,7 +494,7 @@ class Prediction_Model(object):
             params = slim.layers.fully_connected(
                 stp_input, 6, scope='stp_params' + str(i) + suffix,
                 activation_fn=None,
-                reuse= reuse) + identity_params
+                reuse=reuse) + identity_params
             outsize = (prev_image.get_shape()[1], prev_image.get_shape()[2])
             transformed.append(transformer(prev_image, params, outsize))
             trafos.append(params)
@@ -533,7 +538,7 @@ class Prediction_Model(object):
 
         Args:
           prev_image: previous image to be transformed.
-          cdna_input: hidden lyaer to be used for computing CDNA kernels.
+          cdna_input: hidden layer to be used for computing CDNA kernels.
           num_masks: the number of masks and hence the number of CDNA transformations.
           color_channels: the number of color channels in the images.
         Returns:
@@ -553,7 +558,7 @@ class Prediction_Model(object):
             DNA_KERN_SIZE * DNA_KERN_SIZE * num_masks,
             scope='cdna_params',
             activation_fn=None,
-            reuse = reuse_sc)
+            reuse=reuse_sc)
 
         # Reshape and normalize.
         cdna_kerns = tf.reshape(
@@ -636,6 +641,9 @@ def generator_fn(inputs, mode, hparams):
     outputs = {
         'gen_images': tf.stack(m.gen_images, axis=0),
         'gen_states': tf.stack(m.gen_states, axis=0),
+        'gen_masks': tf.stack(m.gen_masks, axis=1),
+        'gen_cdna_kernels': tf.stack(m.gen_cdna_kernels, axis=0),
+        'gen_extra_image': m.gen_extra_image,
     }
     if 'pix_distribs' in inputs:
         outputs['gen_pix_distribs'] = tf.stack(m.gen_distrib1, axis=0)
