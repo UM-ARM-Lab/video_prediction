@@ -15,9 +15,10 @@ def main():
     parser.add_argument('input_dir')
     parser.add_argument('dataset')
     parser.add_argument('dataset_hparams_dict')
-    parser.add_argument('outdir')
+    parser.add_argument('outfile')
     parser.add_argument('--mode', choices=['train', 'test', 'val'], default='train')
     parser.add_argument('--fps', type=int, default=2)
+    parser.add_argument('--first-n', type=int, default=-1)
 
     np.random.seed(0)
     tf.random.set_random_seed(0)
@@ -39,8 +40,9 @@ def main():
 
     inputs = dataset.make_batch(16, shuffle=False)
     batch_idx = 0
-    outfile = os.path.join(args.outdir, "{}_video.mp4".format(args.mode))
+    outfile = "{}_{}.mp4".format(args.outfile, args.mode)
     print("writing to {}".format(outfile))
+    frame_idx = 0
     with imageio.get_writer(outfile, fps=args.fps) as writer:
         while True:
             try:
@@ -51,12 +53,23 @@ def main():
             images = outputs['images']
             images = np.clip((images * 255), 0, 255).astype(np.uint8)
 
-            for traj in images:
-                for image in traj:
-                    writer.append_data(image)
+            done = write_images(args, frame_idx, images, writer)
+            if done:
+                print("Stopping early!")
+                break
 
             print("batch {}".format(batch_idx))
             batch_idx += 1
+
+
+def write_images(args, frame_idx, images, writer):
+    for traj in images:
+        for image in traj:
+            if 0 < args.first_n <= frame_idx:
+                return True
+            writer.append_data(image)
+            frame_idx += 1
+    return False
 
 
 if __name__ == '__main__':
