@@ -30,12 +30,13 @@ def main():
     parser.add_argument("--model", type=str, help="model class name", default='sna')
     parser.add_argument("--model_hparams", type=str, help="a string of comma separated list of model hyperparameters")
     parser.add_argument("--fps", type=int, default=1)
+    parser.add_argument("-t", type=int, default=0)
     parser.add_argument("-s", type=int, default=64)
     parser.add_argument("--seed", type=int, default=0)
 
     args = parser.parse_args()
 
-    results = setup_and_run(args, context_length)
+    results, has_made_up = setup_and_run(args, context_length)
 
     for k, v in results.items():
         print("{:40s}: {}".format(k, v.shape))
@@ -44,37 +45,46 @@ def main():
     # second index is the time step, in this case the last "context" time step
     # t=0 is the first generates image, and so the first context image would be t=-1
     # by writing t=n we are asking to visualize how image at t=n was generated
-    t = 0
-    assert t >= 0
-    kernels = results['cdna_kernels'][0, t].squeeze()
-    masks = results['masks'][0, t].squeeze()
+    assert args.t >= 0
+    kernels = results['cdna_kernels'][0, args.t].squeeze()
+    masks = results['masks'][0, args.t].squeeze()
 
-    background_image = results['background_images'][0, t].squeeze()
-    made_up_image = results['made_up_images'][0, t].squeeze()
-    images_transformed = results['transformed_images'][0, t].squeeze()
-    masked_images = results['masked_images'][0, t].squeeze()
-    images_fused = results['fused_images'][0, t].squeeze()
+    background_image = results['background_images'][0, args.t].squeeze()
+    images_transformed = results['transformed_images'][0, args.t].squeeze()
+    masked_images = results['masked_images'][0, args.t].squeeze()
+    images_fused = results['fused_images'][0, args.t].squeeze()
 
-    background_pix_distrib = results['background_pix_distribs'][0, t].squeeze()
-    made_up_pix_distrib = results['made_up_pix_distribs'][0, t].squeeze()
-    transformed_pix_distribs = results['transformed_pix_distribs'][0, t].squeeze()
-    pix_distribs_masked = results['pix_distribs_masked'][0, t].squeeze()
-    pix_distribs_fused = results['pix_distribs_fused'][0, t].squeeze()
+    background_pix_distrib = results['background_pix_distribs'][0, args.t].squeeze()
+    transformed_pix_distribs = results['transformed_pix_distribs'][0, args.t].squeeze()
+    pix_distribs_masked = results['masked_pix_distribs'][0, args.t].squeeze()
+    pix_distribs_fused = results['fused_pix_distribs'][0, args.t].squeeze()
+
+    if has_made_up:
+        made_up_image = results['made_up_images'][0, args.t].squeeze()
+        made_up_pix_distrib = results['made_up_pix_distribs'][0, args.t].squeeze()
+    else:
+        made_up_image = None
+        made_up_pix_distrib = None
 
     # NOTE: first dimension of masked_images is the different output images
-    #  the first one is the background image masked, the second is the made-up image masked,
+    #  the first one is the background image masked, args.the second is the made-up image masked,
     #  and the rest correspond to the different CDNA kernels
     background_masked_image = masked_images[0]
-    made_up_masked_images = masked_images[1]
     background_pix_distrib_masked = pix_distribs_masked[0]
-    made_up_pix_dstrib_masked = pix_distribs_masked[1]
-
-    if t <= context_length:
-        prev_image = results['input_images'][0, t].squeeze()
-        prev_pix_distrib = results['input_pix_distribs'][0, t].squeeze()
+    extra_masks = 2 if has_made_up else 1
+    if has_made_up:
+        made_up_masked_images = masked_images[1]
+        made_up_pix_distrib_masked = pix_distribs_masked[1]
     else:
-        prev_image = results['fused_images'][0, t].squeeze()
-        prev_pix_distrib = results['fused_pix_distribs'][0, t].squeeze()
+        made_up_masked_images = None
+        made_up_pix_distrib_masked = None
+
+    if args.t <= context_length:
+        prev_image = results['input_images'][0, args.t].squeeze()
+        prev_pix_distrib = results['input_pix_distribs'][0, args.t].squeeze()
+    else:
+        prev_image = results['fused_images'][0, args.t - 1].squeeze()
+        prev_pix_distrib = results['fused_pix_distribs'][0, args.t - 1].squeeze()
 
     n_outputs = masked_images.shape[0]
 
@@ -82,7 +92,7 @@ def main():
     mpl.rcParams['figure.subplot.wspace'] = 0.1
     mpl.rcParams['figure.subplot.hspace'] = 0.1
     mpl.rcParams['figure.titlesize'] = 7
-    mpl.rcParams['figure.figsize'] = (12.8, 9.6)
+    mpl.rcParams['figure.figsize'] = (9.3, 7)
     mpl.rcParams['figure.dpi'] = 100
     mpl.rcParams['axes.formatter.useoffset'] = False
     mpl.rcParams['figure.facecolor'] = 'white'
@@ -99,9 +109,10 @@ def main():
                    made_up_image,
                    made_up_masked_images,
                    masks,
-                   made_up_pix_dstrib_masked,
+                   made_up_pix_distrib_masked,
                    background_image,
-                   background_pix_distrib)
+                   background_pix_distrib,
+                   has_made_up)
     if args.outdir:
         plt.savefig(os.path.join(args.outdir, 'non_background_fig.png'))
 
@@ -113,7 +124,9 @@ def main():
                                             masks,
                                             prev_image,
                                             images_transformed,
-                                            n_outputs)
+                                            n_outputs,
+                                            extra_masks,
+                                            )
 
     ###############################################
     # CDNA Visualization on the pixel distributions
@@ -124,6 +137,7 @@ def main():
                                                         transformed_pix_distribs,
                                                         prev_pix_distrib,
                                                         n_outputs,
+                                                        extra_masks,
                                                         )
 
     ################################################################################
@@ -137,16 +151,19 @@ def main():
                     pix_distribs_fused,
                     masked_images,
                     pix_distribs_masked,
-                    made_up_pix_dstrib_masked,
+                    made_up_pix_distrib_masked,
                     background_image,
                     background_pix_distrib,
                     n_outputs,
+                    has_made_up,
+                    extra_masks,
                     )
 
     ##############################################################
     # Show the context image and the made-up masked image overlaid
     ##############################################################
-    prev_vs_made_up_viz(prev_image, made_up_masked_images)
+    if has_made_up:
+        prev_vs_made_up_viz(prev_image, made_up_masked_images)
 
     ###############
     # Show and save
@@ -155,8 +172,18 @@ def main():
         transformed_image_anim.save(os.path.join(args.outdir, 'transformed_image_figure.gif'), writer='imagemagick')
         transformed_pix_distrib_anim.save(os.path.join(args.outdir, 'transformed_pix_distrib_figure.gif'), writer='imagemagick')
 
-    plt.tight_layout()
     plt.show()
+
+
+def imshow_madeup_if_has(ax, image, has_made_up, **kwargs):
+    if has_made_up:
+        ax.imshow(image, vmin=0, vmax=1, **kwargs)
+    else:
+        ax.plot([0, 64], [0, 64], c='r')
+        ax.plot([0, 0, 64, 64, 0], [0, 64, 64, 0, 0], c='gray')
+        ax.set_xlim(0, 64)
+        ax.set_ylim(0, 64)
+        ax.set_aspect(1)
 
 
 def non_motion_viz(background_masked_image: np.ndarray,
@@ -165,13 +192,14 @@ def non_motion_viz(background_masked_image: np.ndarray,
                    made_up_image: np.ndarray,
                    made_up_masked_image: np.ndarray,
                    masks: np.ndarray,
-                   prev_pix_distrib_masked: np.ndarray,
+                   made_up_pix_distrib_masked: np.ndarray,
                    background_image: np.ndarray,
                    background_pix_distrib: np.ndarray,
+                   has_made_up: bool,
                    ):
     # the first mask is the one for the background image
     # the second mask is the made-up 'extra' image
-    fig, axes = plt.subplots(nrows=4, ncols=3, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
+    fig, axes = plt.subplots(nrows=4, ncols=3, gridspec_kw={'wspace': 0.1, 'hspace': 0.2})
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
@@ -183,24 +211,27 @@ def non_motion_viz(background_masked_image: np.ndarray,
     axes[0, 1].imshow(masks[0], cmap='gray', vmin=0, vmax=1)
     axes[0, 2].set_title("background image, masked")
     axes[0, 2].imshow(background_masked_image, vmin=0, vmax=1)
+
     axes[1, 0].set_title("made-up image")
-    axes[1, 0].imshow(made_up_image, vmin=0, vmax=1)
+    imshow_madeup_if_has(axes[1, 0], made_up_image, has_made_up)
     axes[1, 1].set_title("made-up mask")
-    axes[1, 1].imshow(masks[1], cmap='gray', vmin=0, vmax=1)
+    imshow_madeup_if_has(axes[1, 1], masks[1], has_made_up, cmap='gray')
     axes[1, 2].set_title("masked made up image")
-    axes[1, 2].imshow(made_up_masked_image, vmin=0, vmax=1)
+    imshow_madeup_if_has(axes[1, 2], made_up_masked_image, has_made_up)
+
     axes[2, 0].set_title("background pix distrib")
     axes[2, 0].imshow(background_pix_distrib, vmin=0, vmax=1)
     axes[2, 1].set_title("background mask")
     axes[2, 1].imshow(masks[0], cmap='gray', vmin=0, vmax=1)
     axes[2, 2].set_title("background pix distrib masked")
     axes[2, 2].imshow(background_pix_distrib_masked, vmin=0, vmax=1)
+
     axes[3, 0].set_title("made-up pix_distrib")
-    axes[3, 0].imshow(made_up_pix_distrib, vmin=0, vmax=1)
+    imshow_madeup_if_has(axes[3, 0], made_up_pix_distrib, has_made_up)
     axes[3, 1].set_title("made-up mask")
-    axes[3, 1].imshow(masks[1], cmap='gray', vmin=0, vmax=1)
+    imshow_madeup_if_has(axes[3, 1], masks[1], has_made_up, cmap='gray')
     axes[3, 2].set_title("masked made up pix distrib")
-    axes[3, 2].imshow(prev_pix_distrib_masked, vmin=0, vmax=1)
+    imshow_madeup_if_has(axes[3, 2], made_up_pix_distrib_masked, has_made_up)
 
 
 def prev_vs_made_up_viz(prev_image: np.ndarray,
@@ -229,10 +260,12 @@ def combination_viz(background_masked_image: np.ndarray,
                     gen_pix_distribs: np.ndarray,
                     masked_images: np.ndarray,
                     pix_distribs_masked: np.ndarray,
-                    prev_pix_distrib_masked: np.ndarray,
+                    made_up_pix_distrib_masked: np.ndarray,
                     background_image: np.ndarray,
                     background_pix_distrib: np.ndarray,
                     n_outputs: int,
+                    has_made_up: bool,
+                    extra_masks: int,
                     ):
     fig, axes = plt.subplots(nrows=2, ncols=n_outputs + 3, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
     for ax in axes.flatten():
@@ -252,18 +285,20 @@ def combination_viz(background_masked_image: np.ndarray,
 
     for i in range(n_outputs - 2):
         axes[0, i + 2].set_title("masked #{}".format(i))
-        axes[0, i + 2].imshow(np.clip(masked_images[i + 2], 0, 1), vmin=0, vmax=1)
+        axes[0, i + 2].imshow(np.clip(masked_images[i + extra_masks], 0, 1), vmin=0, vmax=1)
         axes[1, i + 2].set_title("masked #{}".format(i))
-        axes[1, i + 2].imshow(np.clip(pix_distribs_masked[i + 2], 0, 1), vmin=0, vmax=1)
+        axes[1, i + 2].imshow(np.clip(pix_distribs_masked[i + extra_masks], 0, 1), vmin=0, vmax=1)
 
     axes[0, -3].set_title('background\nmasked')
     axes[0, -3].imshow(background_masked_image, vmin=0, vmax=1)
     axes[1, -3].set_title('background\nmasked')
     axes[1, -3].imshow(background_pix_distrib_masked, vmin=0, vmax=1)
+
     axes[0, -2].set_title('made-up\nmasked')
-    axes[0, -2].imshow(masked_images[1], vmin=0, vmax=1)
-    axes[1, -2].set_title('made-up/prev\nmasked')
-    axes[1, -2].imshow(prev_pix_distrib_masked, vmin=0, vmax=1)
+    imshow_madeup_if_has(axes[0, -2], masked_images[1], has_made_up)
+    axes[1, -2].set_title('made-up\nmasked')
+    imshow_madeup_if_has(axes[1, -2], made_up_pix_distrib_masked, has_made_up)
+
     axes[0, -1].set_title("combined image")
     axes[0, -1].imshow(np.clip(gen_images, 0, 1), vmin=0, vmax=1)
     axes[1, -1].set_title("combined pix\ndistrib")
@@ -276,6 +311,7 @@ def cdna_pix_distrib_viz(kernels: np.ndarray,
                          transformed_pix_distribs: np.ndarray,
                          prev_pix_distrib: np.ndarray,
                          n_outputs: int,
+                         extra_masks: int,
                          ):
     fig, axes = plt.subplots(nrows=4, ncols=n_outputs - 2, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
     for ax in axes.flatten():
@@ -308,11 +344,11 @@ def cdna_pix_distrib_viz(kernels: np.ndarray,
 
     transformed_pix_distrib_anim = FuncAnimation(fig, transformed_pix_distrib_update, frames=2, interval=1000, repeat=True)
     for i in range(n_outputs - 2):
-        mask = masks[i + 2]
+        mask = masks[i + extra_masks]
         axes[2, i].set_title("mask #{}".format(i))
         axes[2, i].imshow(mask, cmap='gray', vmin=0, vmax=1)
     for i in range(n_outputs - 2):
-        output = pix_distribs_masked[i + 2]
+        output = pix_distribs_masked[i + extra_masks]
         axes[3, i].set_title("masked #{}".format(i))
         axes[3, i].imshow(output, vmin=0, vmax=1)
     return transformed_pix_distrib_anim
@@ -324,6 +360,7 @@ def cdna_image_viz(kernels: np.ndarray,
                    prev_image: np.ndarray,
                    images_transformed: np.ndarray,
                    n_outputs: int,
+                   extra_masks: int,
                    ):
     fig, axes = plt.subplots(nrows=4, ncols=n_outputs - 2, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
     for ax in axes.flatten():
@@ -352,15 +389,15 @@ def cdna_image_viz(kernels: np.ndarray,
             if j == 0:
                 transformed_image_handles[i].set_data(prev_image)
             else:
-                transformed_image_handles[i].set_data(np.clip(images_transformed[i + 1], 0, 1))
+                transformed_image_handles[i].set_data(np.clip(images_transformed[i + (extra_masks - 1)], 0, 1))
 
     transformed_image_anim = FuncAnimation(fig, transformed_image_update, frames=2, interval=1000, repeat=True)
     for i in range(n_outputs - 2):
-        mask = masks[i + 2]
+        mask = masks[i + extra_masks]
         axes[2, i].set_title("mask #{}".format(i))
         axes[2, i].imshow(mask, cmap='gray', vmin=0, vmax=1)
     for i in range(n_outputs - 2):
-        output = masked_images[i + 2]
+        output = masked_images[i + extra_masks]
         axes[3, i].set_title("masked #{}".format(i))
         axes[3, i].imshow(output, vmin=0, vmax=1)
     return transformed_image_anim
@@ -381,8 +418,8 @@ def setup_and_run(args, context_length):
     sess.graph.as_default()
     model.restore(sess, args.checkpoint)
 
-    # source_pixel = gui_tools.get_source_pixel(context_images[1])
-    source_pixel = NumpyPoint(51, 11)
+    # source_pixel = gui_tools.get_source_pixel(context_images[0])
+    source_pixel = NumpyPoint(19, 26)
 
     context_pix_distribs = np.zeros((1, context_length, args.s, args.s, 1), dtype=np.float32)
     context_pix_distribs[0, 0, source_pixel.row, source_pixel.col] = 1.0
@@ -409,19 +446,22 @@ def setup_and_run(args, context_length):
         'masks': model.outputs['gen_masks'],
 
         'background_images': model.outputs['gen_background_images'],
-        'made_up_images': model.outputs['gen_made_up_images'],
         'transformed_images': model.outputs['gen_transformed_images'],
         'masked_images': model.outputs['gen_masked_images'],
         'fused_images': model.outputs['gen_images'],
 
         'background_pix_distribs': model.outputs['gen_background_pix_distribs'],
-        'made_up_pix_distribs': model.outputs['gen_made_up_pix_distribs'],
         'transformed_pix_distribs': model.outputs['gen_transformed_pix_distribs'],
-        'pix_distribs_masked': model.outputs['gen_masked_pix_distribs'],
+        'masked_pix_distribs': model.outputs['gen_masked_pix_distribs'],
         'fused_pix_distribs': model.outputs['gen_pix_distribs'],
     }
+
+    if model.hparams.generate_scratch_image:
+        fetches['made_up_images'] = model.outputs['gen_made_up_images']
+        fetches['made_up_pix_distribs'] = model.outputs['gen_made_up_pix_distribs']
+
     results = sess.run(fetches, feed_dict=feed_dict)
-    return results
+    return results, model.hparams.generate_scratch_image
 
 
 if __name__ == '__main__':
