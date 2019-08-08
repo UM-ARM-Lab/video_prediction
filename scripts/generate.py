@@ -134,6 +134,7 @@ def main():
 
     inputs = dataset.make_batch(args.batch_size)
     input_phs = {k: tf.placeholder(v.dtype, v.shape, '%s_ph' % k) for k, v in inputs.items()}
+    print(input_phs)
     with tf.variable_scope(''):
         model.build_graph(input_phs)
 

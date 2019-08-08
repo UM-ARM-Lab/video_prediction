@@ -7,7 +7,7 @@ from . import ops
 
 
 def load_data(context_image_filenames, context_states_filename, actions_filename):
-    actions = np.genfromtxt(actions_filename, delimiter=',', dtype=np.float32)
+    actions = np.atleast_2d(np.genfromtxt(actions_filename, delimiter=',', dtype=np.float32))
     context_states = np.genfromtxt(context_states_filename, delimiter=',', dtype=np.float32)
     context_images = []
     for time_step_idx, context_image_filename in enumerate(context_image_filenames):

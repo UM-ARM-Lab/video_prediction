@@ -56,7 +56,7 @@ def main():
 
     background_pix_distrib = results['background_pix_distribs'][0, args.t].squeeze()
     transformed_pix_distribs = results['transformed_pix_distribs'][0, args.t].squeeze()
-    pix_distribs_masked = results['masked_pix_distribs'][0, args.t].squeeze()
+    masked_pix_distribs = results['masked_pix_distribs'][0, args.t].squeeze()
     pix_distribs_fused = results['fused_pix_distribs'][0, args.t].squeeze()
 
     if has_made_up:
@@ -70,11 +70,11 @@ def main():
     #  the first one is the background image masked, args.the second is the made-up image masked,
     #  and the rest correspond to the different CDNA kernels
     background_masked_image = masked_images[0]
-    background_pix_distrib_masked = pix_distribs_masked[0]
+    background_pix_distrib_masked = masked_pix_distribs[0]
     extra_masks = 2 if has_made_up else 1
     if has_made_up:
         made_up_masked_images = masked_images[1]
-        made_up_pix_distrib_masked = pix_distribs_masked[1]
+        made_up_pix_distrib_masked = masked_pix_distribs[1]
     else:
         made_up_masked_images = None
         made_up_pix_distrib_masked = None
@@ -86,7 +86,7 @@ def main():
         prev_image = results['fused_images'][0, args.t - 1].squeeze()
         prev_pix_distrib = results['fused_pix_distribs'][0, args.t - 1].squeeze()
 
-    n_outputs = masked_images.shape[0]
+    n_kernels = kernels.shape[0]
 
     # Configure matplotlib
     mpl.rcParams['figure.subplot.wspace'] = 0.1
@@ -124,7 +124,7 @@ def main():
                                             masks,
                                             prev_image,
                                             images_transformed,
-                                            n_outputs,
+                                            n_kernels,
                                             extra_masks,
                                             )
 
@@ -132,11 +132,11 @@ def main():
     # CDNA Visualization on the pixel distributions
     ###############################################
     transformed_pix_distrib_anim = cdna_pix_distrib_viz(kernels,
-                                                        pix_distribs_masked,
+                                                        masked_pix_distribs,
                                                         masks,
                                                         transformed_pix_distribs,
                                                         prev_pix_distrib,
-                                                        n_outputs,
+                                                        n_kernels,
                                                         extra_masks,
                                                         )
 
@@ -150,11 +150,11 @@ def main():
                     images_fused,
                     pix_distribs_fused,
                     masked_images,
-                    pix_distribs_masked,
+                    masked_pix_distribs,
                     made_up_pix_distrib_masked,
                     background_image,
                     background_pix_distrib,
-                    n_outputs,
+                    n_kernels,
                     has_made_up,
                     extra_masks,
                     )
@@ -263,11 +263,11 @@ def combination_viz(background_masked_image: np.ndarray,
                     made_up_pix_distrib_masked: np.ndarray,
                     background_image: np.ndarray,
                     background_pix_distrib: np.ndarray,
-                    n_outputs: int,
+                    n_kernels: int,
                     has_made_up: bool,
                     extra_masks: int,
                     ):
-    fig, axes = plt.subplots(nrows=2, ncols=n_outputs + 3, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
+    fig, axes = plt.subplots(nrows=2, ncols=n_kernels + 5, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
@@ -283,7 +283,7 @@ def combination_viz(background_masked_image: np.ndarray,
     axes[1, 1].set_title("previous pix\ndistrib")
     axes[1, 1].imshow(prev_pix_distrib, vmin=0, vmax=1)
 
-    for i in range(n_outputs - 2):
+    for i in range(n_kernels):
         axes[0, i + 2].set_title("masked #{}".format(i))
         axes[0, i + 2].imshow(np.clip(masked_images[i + extra_masks], 0, 1), vmin=0, vmax=1)
         axes[1, i + 2].set_title("masked #{}".format(i))
@@ -310,22 +310,22 @@ def cdna_pix_distrib_viz(kernels: np.ndarray,
                          masks: np.ndarray,
                          transformed_pix_distribs: np.ndarray,
                          prev_pix_distrib: np.ndarray,
-                         n_outputs: int,
+                         n_kernels: int,
                          extra_masks: int,
                          ):
-    fig, axes = plt.subplots(nrows=4, ncols=n_outputs - 2, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
+    fig, axes = plt.subplots(nrows=4, ncols=n_kernels + 1, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
         ax.axis("off")
-    for i in range(n_outputs - 2):
+    for i in range(n_kernels):
         kernel = kernels[i]
         axes[0, i].set_title("kernel #{}".format(i))
         # Don't set vmin/vmax here, we let matplotlib normalize these here since they only show relative "motion"
         axes[0, i].imshow(kernel, cmap='Blues', vmin=0, vmax=1)
     transformed_pix_distrib_handles = []
     step_text_handles = []
-    for i in range(n_outputs - 2):
+    for i in range(n_kernels):
         axes[1, i].set_title("transformed #{}".format(i))
         transformed_pix_distrib_handle = axes[1, i].imshow(prev_pix_distrib, vmin=0, vmax=1)
         transformed_pix_distrib_handles.append(transformed_pix_distrib_handle)
@@ -334,7 +334,7 @@ def cdna_pix_distrib_viz(kernels: np.ndarray,
         step_text_handles.append(step_text_handle)
 
     def transformed_pix_distrib_update(j):
-        for i in range(n_outputs - 2):
+        for i in range(n_kernels):
             # Note: there's no "made-up" image or background image in transformed_pix_distribs
             step_text_handles[i].set_text("t={}".format(j))
             if j == 0:
@@ -343,11 +343,11 @@ def cdna_pix_distrib_viz(kernels: np.ndarray,
                 transformed_pix_distrib_handles[i].set_data(np.clip(transformed_pix_distribs[i], 0, 1))
 
     transformed_pix_distrib_anim = FuncAnimation(fig, transformed_pix_distrib_update, frames=2, interval=1000, repeat=True)
-    for i in range(n_outputs - 2):
+    for i in range(n_kernels):
         mask = masks[i + extra_masks]
         axes[2, i].set_title("mask #{}".format(i))
         axes[2, i].imshow(mask, cmap='gray', vmin=0, vmax=1)
-    for i in range(n_outputs - 2):
+    for i in range(n_kernels):
         output = pix_distribs_masked[i + extra_masks]
         axes[3, i].set_title("masked #{}".format(i))
         axes[3, i].imshow(output, vmin=0, vmax=1)
@@ -359,22 +359,22 @@ def cdna_image_viz(kernels: np.ndarray,
                    masks: np.ndarray,
                    prev_image: np.ndarray,
                    images_transformed: np.ndarray,
-                   n_outputs: int,
+                   n_kernels: int,
                    extra_masks: int,
                    ):
-    fig, axes = plt.subplots(nrows=4, ncols=n_outputs - 2, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
+    fig, axes = plt.subplots(nrows=4, ncols=n_kernels + 1, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
         ax.axis("off")
-    for i in range(n_outputs - 2):
+    for i in range(n_kernels):
         kernel = kernels[i]
         axes[0, i].set_title("kernel #{}".format(i))
         # Don't set vmin/vmax here, we let matplotlib normalize these here since they only show relative "motion"
         axes[0, i].imshow(kernel, cmap='Blues', vmin=0, vmax=1)
     transformed_image_handles = []
     step_text_handles = []
-    for i in range(n_outputs - 2):
+    for i in range(n_kernels):
         axes[1, i].set_title("transformed #{}".format(i))
         transformed_image_handle = axes[1, i].imshow(prev_image, vmin=0, vmax=1)
         transformed_image_handles.append(transformed_image_handle)
@@ -383,7 +383,7 @@ def cdna_image_viz(kernels: np.ndarray,
         step_text_handles.append(step_text_handle)
 
     def transformed_image_update(j):
-        for i in range(n_outputs - 2):
+        for i in range(n_kernels):
             # the background image is not transformed, so just skip the first image which is the transformed "made-up" image
             step_text_handles[i].set_text("t={}".format(j))
             if j == 0:
@@ -392,11 +392,11 @@ def cdna_image_viz(kernels: np.ndarray,
                 transformed_image_handles[i].set_data(np.clip(images_transformed[i + (extra_masks - 1)], 0, 1))
 
     transformed_image_anim = FuncAnimation(fig, transformed_image_update, frames=2, interval=1000, repeat=True)
-    for i in range(n_outputs - 2):
+    for i in range(n_kernels):
         mask = masks[i + extra_masks]
         axes[2, i].set_title("mask #{}".format(i))
         axes[2, i].imshow(mask, cmap='gray', vmin=0, vmax=1)
-    for i in range(n_outputs - 2):
+    for i in range(n_kernels):
         output = masked_images[i + extra_masks]
         axes[3, i].set_title("masked #{}".format(i))
         axes[3, i].imshow(output, vmin=0, vmax=1)
@@ -405,12 +405,18 @@ def cdna_image_viz(kernels: np.ndarray,
 
 def setup_and_run(args, context_length):
     context_states, context_images, actions = load_data(args.images, args.states, args.actions)
-    future_length, action_dim = actions.shape
+    actions_length, action_dim = actions.shape
     state_dim = 2
     image_dim = [args.s, args.s, 3]
-    total_length = context_length + future_length
+    # NOTE: We don't add context_length because that is not how action are fed in. The first action is supposed to be the action
+    # that transitions from the first context image to the second context image. Therefore, regardless of the context length,
+    # the total number of predicted images will always be 1+ the number of actions. This of course means there's two ways
+    # to construct an output sequestion:
+    # 1) take the first context image and the rest of the generate images
+    # 1) all the context images and only the images generate after the context images (i.e. warm start done)
+    total_length = 1 + actions_length
     print('Total Time Length:', total_length)
-    inputs_placeholders = build_placeholders(total_length, state_dim, action_dim, image_dim)
+    inputs_placeholders = build_placeholders(total_length, actions_length, state_dim, action_dim, image_dim)
     model = build_model(args.checkpoint, args.model, args.model_hparams, context_length, inputs_placeholders, total_length)
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
     config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
@@ -418,20 +424,23 @@ def setup_and_run(args, context_length):
     sess.graph.as_default()
     model.restore(sess, args.checkpoint)
 
-    # source_pixel = gui_tools.get_source_pixel(context_images[0])
-    source_pixel = NumpyPoint(19, 26)
+    source_pixel = gui_tools.get_source_pixel(context_images[0])
+    # source_pixel = NumpyPoint(19, 26)
 
     context_pix_distribs = np.zeros((1, context_length, args.s, args.s, 1), dtype=np.float32)
     context_pix_distribs[0, 0, source_pixel.row, source_pixel.col] = 1.0
     context_pix_distribs[0, 1, source_pixel.row, source_pixel.col] = 1.0
+
     padded_context_states = np.zeros([1, total_length, state_dim], np.float32)
     padded_context_images = np.zeros([1, total_length, args.s, args.s, 3], np.float32)
     padded_context_pix_distribs = np.zeros([1, total_length, args.s, args.s, 1], np.float32)
-    padded_actions = np.zeros([1, total_length, action_dim], np.float32)
+    padded_actions = np.zeros([1, actions_length, action_dim], np.float32)
+
     padded_context_states[0, :context_length] = context_states
     padded_context_images[0, :context_length] = context_images
-    padded_context_pix_distribs[0, : context_length] = context_pix_distribs
-    padded_actions[0, context_length - 1: -1] = actions
+    padded_context_pix_distribs[0, :context_length] = context_pix_distribs
+    padded_actions[0] = actions
+
     feed_dict = {
         inputs_placeholders['states']: padded_context_states,
         inputs_placeholders['images']: padded_context_images,

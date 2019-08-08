@@ -265,6 +265,7 @@ class Prediction_Model(object):
                     background = prev_image
 
                 self.gen_background_images.append(background)
+                # the first image in masked_images will be the masked background image
                 fused_images, mask_list, masked_images = self.mask_and_fuse_transformed_images(enc6, background,
                                                                                               transformed_list,
                                                                                               scope='convt7_cam2',
@@ -279,7 +280,7 @@ class Prediction_Model(object):
                                                                                                 self.pix_distributions1,
                                                                                                 made_up_pix_distrib1,
                                                                                                 transf_distrib_ndesig1)
-                    background_pix1 = mask_fuse_pix_distrib1_result[0]
+                    background_pix_distrib1 = mask_fuse_pix_distrib1_result[0]
                     made_up_pix_distrib1 = mask_fuse_pix_distrib1_result[1]
                     # the masked version of the made-up pix is in the 0th element of masked_pix_distribs1
                     masked_pix_distribs1 = mask_fuse_pix_distrib1_result[2]
@@ -287,7 +288,7 @@ class Prediction_Model(object):
 
                     self.gen_pix_distrib1.append(fused_pix_distrib1)
                     self.gen_made_up_pix_distrib1.append(made_up_pix_distrib1)
-                    self.gen_background_pix_distrib1.append(background_pix1)
+                    self.gen_background_pix_distrib1.append(background_pix_distrib1)
                     self.gen_masked_pix_distrib1.append(tf.stack(masked_pix_distribs1, axis=1))
                     # ndeign means there are two "designated" source/target pixel pairs
                     # this code base only supports one or two pixel pairs

@@ -54,11 +54,17 @@ def main():
     context_states, context_images, actions = load_data(args.images, args.states, args.actions)
     source_pixel = gui_tools.get_source_pixel(context_images[1])
 
-    future_length, action_dim = actions.shape
+    actions_length, action_dim = actions.shape
     _, state_dim = context_states.shape
     image_dim = context_images.shape[1:]
-    total_length = context_length + future_length
-    inputs_placeholders = build_placeholders(total_length, state_dim, action_dim, image_dim)
+    # NOTE: We don't add context_length because that is not how action are fed in. The first action is supposed to be the action
+    # that transitions from the first context image to the second context image. Therefore, regardless of the context length,
+    # the total number of predicted images will always be 1+ the number of actions. This of course means there's two ways
+    # to construct an output sequestion:
+    # 1) take the first context image and the rest of the generate images
+    # 1) all the context images and only the images generate after the context images (i.e. warm start done)
+    total_length = 1 + context_length
+    inputs_placeholders = build_placeholders(total_length, actions_length, state_dim, action_dim, image_dim)
 
     context_pixel_distribs = np.zeros((1, context_length, image_dim[0], image_dim[1], 1), dtype=np.float32)
     context_pixel_distribs[0, 0, source_pixel.row, source_pixel.col] = 1.0
@@ -76,11 +82,12 @@ def main():
     padded_context_states = np.zeros([1, total_length, state_dim], np.float32)
     padded_context_images = np.zeros([1, total_length, *image_dim], np.float32)
     padded_context_pixel_distribs = np.zeros([1, total_length, image_dim[0], image_dim[1], 1], np.float32)
-    padded_actions = np.zeros([1, total_length, action_dim], np.float32)
-    padded_context_states[0, : context_length] = context_states
-    padded_context_images[0, : context_length] = context_images
-    padded_context_pixel_distribs[0, : context_length] = context_pixel_distribs
-    padded_actions[0, context_length - 1: -1] = actions
+    padded_actions = np.zeros([1, actions_length, action_dim], np.float32)
+
+    padded_context_states[0, :context_length] = context_states
+    padded_context_images[0, :context_length] = context_images
+    padded_context_pixel_distribs[0, :context_length] = context_pixel_distribs
+    padded_actions[0] = actions
 
     feed_dict = {
         inputs_placeholders['states']: padded_context_states,

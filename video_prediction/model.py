@@ -34,7 +34,7 @@ class VisualPredictionModel:
         self.context_length = context_length
         self.prediction_length = future_length
         self.total_length = context_length + future_length
-        self.placeholders = build_placeholders(self.total_length, state_dim, action_dim, image_dim)
+        self.placeholders = build_placeholders(self.total_length, self.prediction_length, state_dim, action_dim, image_dim)
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning)
@@ -117,7 +117,7 @@ class VisualPredictionModel:
         return gen_images, gen_states
 
 
-def build_placeholders(total_length, state_dim, action_dim, image_dim):
+def build_placeholders(total_length, prediction_length, state_dim, action_dim, image_dim):
     # all arrays must be the length of the entire prediction, but only the first context_length will be used
     # we also don't fill the last action because it is not used.
     # Ths way the last action given is actually used to make the final prediction
@@ -126,7 +126,7 @@ def build_placeholders(total_length, state_dim, action_dim, image_dim):
         'states': tf.placeholder(tf.float32, [1, total_length, state_dim]),
         'images': tf.placeholder(tf.float32, [1, total_length, *image_dim]),
         'pix_distribs': tf.placeholder(tf.float32, [1, total_length, h, w, 1]),
-        'actions': tf.placeholder(tf.float32, [1, total_length, action_dim]),
+        'actions': tf.placeholder(tf.float32, [1, prediction_length, action_dim]),
     }
     return placeholders
 
