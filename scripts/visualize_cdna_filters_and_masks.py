@@ -27,7 +27,7 @@ def main():
     parser.add_argument("actions", help='filename')
     parser.add_argument("checkpoint", help="directory with checkpoint or checkpoint name (e.g. checkpoint_dir/model-200000)")
     parser.add_argument("--outdir", default='results', help="ignored if output_gif_dir is specified")
-    parser.add_argument("--model", type=str, help="model class name")
+    parser.add_argument("--model", type=str, help="model class name", default='sna')
     parser.add_argument("--model_hparams", type=str, help="a string of comma separated list of model hyperparameters")
     parser.add_argument("--fps", type=int, default=10)
     parser.add_argument("-s", type=int, default=64)
@@ -42,19 +42,25 @@ def main():
 
     # the occasional first 0 indexing here is due to the batch size of 1
     # second index is the time step, in this case the last "context" time step
-    second_context_image = results['input_images'][0, 1].squeeze()
-    second_context_pix_distrib = results['input_pix_distribs'][0, 1].squeeze()
-    kernels = results['gen_cdna_kernels'][0, 1].squeeze()
-    masks = results['gen_masks'][0, 1].squeeze()
-    transformed_images = results['gen_transformed_images'][0, 1].squeeze()
-    masked_images = results['gen_masked_images'][0, 1].squeeze()
-    transformed_pix_distribs = results['gen_transformed_pix_distribs'][0, 1].squeeze()
-    masked_pix_distribs = results['gen_masked_pix_distribs'][0, 1].squeeze()
-    extra_image = results['gen_made_up_images'][0, 1].squeeze()
-    gen_images = results['gen_images'][0, 1].squeeze()
-    gen_pix_distribs = results['gen_pix_distribs'][0, 1].squeeze()
+    t = 1
+    second_context_image = results['input_images'][0, t].squeeze()
+    context_pix_distribs = results['input_pix_distribs'][0].squeeze()
+    kernels = results['gen_cdna_kernels'][0, t].squeeze()
+    masks = results['gen_masks'][0, t].squeeze()
+    transformed_images = results['gen_transformed_images'][0, t].squeeze()
+    masked_images = results['gen_masked_images'][0, t].squeeze()
+    transformed_pix_distribs = results['gen_transformed_pix_distribs'][0, t].squeeze()
+    masked_pix_distribs = results['gen_masked_pix_distribs'][0, t].squeeze()
+    made_up_image = results['gen_made_up_images'][0, t].squeeze()
+    gen_images = results['gen_images'][0, t].squeeze()
+    gen_pix_distribs = results['gen_pix_distribs'][0, t].squeeze()
 
-    background_pix_masked = masked_pix_distribs[0]
+    first_context_pix_distrib = context_pix_distribs[0]
+    second_context_pix_distrib = context_pix_distribs[1]
+    background_pix_distrib_masked = masked_pix_distribs[0]
+    prev_pix_distrib_masked = masked_pix_distribs[1]  # NOTE: is this processed in the same way the "made up image" is?
+
+    masked_made_up_image = masked_images[1]
 
     # first dimension of gen_masked_images is the different output images
     # the first one is the background image masked, the second is the made-up image masked,
@@ -78,10 +84,11 @@ def main():
     ############################################
     # the first mask is the one for the background image
     # the second mask is the made-up 'extra' image
-    fig, axes = plt.subplots(nrows=3, ncols=3, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
+    fig, axes = plt.subplots(nrows=4, ncols=3, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
+        ax.axis("off")
     # the background image is never transformed, just masked
     axes[0, 0].set_title("background image")
     axes[0, 0].imshow(second_context_image, vmin=0, vmax=1)
@@ -90,19 +97,26 @@ def main():
     axes[0, 2].set_title("background image, masked")
     axes[0, 2].imshow(background_image_masked, vmin=0, vmax=1)
 
-    axes[1, 0].set_title("background pix distrib")
-    axes[1, 0].imshow(second_context_pix_distrib, cmap='rainbow', vmin=0, vmax=1)
-    axes[1, 1].set_title("background mask")
-    axes[1, 1].imshow(masks[0], cmap='gray', vmin=0, vmax=1)
-    axes[1, 2].set_title("background pix distrib masked")
-    axes[1, 2].imshow(background_pix_masked, cmap='gray', vmin=0, vmax=1)
+    axes[1, 0].set_title("made-up image")
+    axes[1, 0].imshow(made_up_image, vmin=0, vmax=1)
+    axes[1, 1].set_title("made-up mask")
+    axes[1, 1].imshow(masks[1], cmap='gray', vmin=0, vmax=1)
+    axes[1, 2].set_title("masked made up image")
+    axes[1, 2].imshow(masked_made_up_image, vmin=0, vmax=1)
 
-    axes[2, 0].set_title("made-up image")
-    axes[2, 0].imshow(extra_image, vmin=0, vmax=1)
-    axes[2, 1].set_title("made-up image mask")
-    axes[2, 1].imshow(masks[1], cmap='gray', vmin=0, vmax=1)
-    axes[2, 2].set_title("masked made up image")
-    axes[2, 2].imshow(masked_images[1], vmin=0, vmax=1)
+    axes[2, 0].set_title("background pix distrib")
+    axes[2, 0].imshow(second_context_pix_distrib, vmin=0, vmax=1)
+    axes[2, 1].set_title("background mask")
+    axes[2, 1].imshow(masks[0], cmap='gray', vmin=0, vmax=1)
+    axes[2, 2].set_title("background pix distrib masked")
+    axes[2, 2].imshow(background_pix_distrib_masked, vmin=0, vmax=1)
+
+    axes[3, 0].set_title("made-up pix_distrib")
+    axes[3, 0].imshow(first_context_pix_distrib, vmin=0, vmax=1)
+    axes[3, 1].set_title("made-up mask")
+    axes[3, 1].imshow(masks[1], cmap='gray', vmin=0, vmax=1)
+    axes[3, 2].set_title("masked made up pix distrib")
+    axes[3, 2].imshow(prev_pix_distrib_masked, vmin=0, vmax=1)
 
     plt.savefig(os.path.join(args.outdir, 'other_figure.png'))
 
@@ -115,10 +129,10 @@ def main():
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
+        ax.axis("off")
 
     for i in range(n_outputs - 2):
         kernel = kernels[i]
-        kernel = kernel / np.linalg.norm(kernel)
         axes[0, i].set_title("kernel #{}".format(i))
         # Don't set vmin/vmax here, we let matplotlib normalize these here since they only show relative "motion"
         axes[0, i].imshow(kernel, cmap='Blues', vmin=0, vmax=1)
@@ -162,10 +176,10 @@ def main():
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
+        ax.axis("off")
 
     for i in range(n_outputs - 2):
         kernel = kernels[i]
-        kernel = kernel / np.linalg.norm(kernel)
         axes[0, i].set_title("kernel #{}".format(i))
         # Don't set vmin/vmax here, we let matplotlib normalize these here since they only show relative "motion"
         axes[0, i].imshow(kernel, cmap='Blues', vmin=0, vmax=1)
@@ -204,58 +218,69 @@ def main():
     ############################################
     # Animate total effect of transforming and masking on pixel distrib and real images
     ############################################
-    fig, axes = plt.subplots(nrows=2, ncols=n_outputs - 1, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
+    fig, axes = plt.subplots(nrows=2, ncols=n_outputs + 2, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
+        ax.axis("off")
 
-    masked_image_handles = []
-    masked_pix_distrib_handles = []
-    image_step_text_handles = []
-    pix_distrib_step_text_handles = []
+    axes[0, 0].set_title("context image")
+    axes[0, 0].imshow(second_context_image, vmin=0, vmax=1)
+    axes[1, 0].set_title("context pix\ndistrib")
+    axes[1, 0].imshow(second_context_pix_distrib, vmin=0, vmax=1)
+
+    # Visually separate the context plot from the other subplots
+    axes[0, 0].plot([70, 70], [0, 64], c='r')
+    axes[1, 0].plot([70, 70], [0, 64], c='r')
+
     for i in range(n_outputs - 2):
-        axes[1, i].set_title("masked #{}".format(i))
-        masked_image_handle = axes[0, i].imshow(second_context_image, vmin=0, vmax=1)
-        masked_image_handles.append(masked_image_handle)
-        image_step_text_handle = axes[0, i].text(5, 8, 't=0', fontdict={'color': 'white', 'size': 5},
-                                                 bbox=dict(facecolor='black', alpha=0.5))
-        image_step_text_handles.append(image_step_text_handle)
+        axes[0, i + 1].set_title("masked #{}".format(i))
+        axes[0, i + 1].imshow(np.clip(masked_images[i + 2], 0, 1), vmin=0, vmax=1)
+        axes[1, i + 1].set_title("masked #{}".format(i))
+        axes[1, i + 1].imshow(np.clip(masked_pix_distribs[i + 2], 0, 1), vmin=0, vmax=1)
 
-        masked_pix_distrib_handle = axes[1, i].imshow(second_context_pix_distrib, vmin=0, vmax=1)
-        masked_pix_distrib_handles.append(masked_pix_distrib_handle)
-        pix_distrib_step_text_handle = axes[1, i].text(5, 8, 't=0', fontdict={'color': 'white', 'size': 5},
-                                                       bbox=dict(facecolor='black', alpha=0.5))
-        pix_distrib_step_text_handles.append(pix_distrib_step_text_handle)
+    axes[0, -3].set_title('background\nmasked')
+    axes[0, -3].imshow(background_image_masked, vmin=0, vmax=1)
+    axes[1, -3].set_title('background\nmasked')
+    axes[1, -3].imshow(background_pix_distrib_masked, vmin=0, vmax=1)
 
-        combined_image_handle = axes[0, i].imshow(second_context_image, vmin=0, vmax=1)
-        combined_pix_distrib_handle = axes[0, i].imshow(second_context_pix_distrib, vmin=0, vmax=1)
+    axes[0, -2].set_title('made-up\nmasked')
+    axes[0, -2].imshow(masked_images[1], vmin=0, vmax=1)
+    axes[1, -2].set_title('made-up/prev\nmasked')
+    axes[1, -2].imshow(prev_pix_distrib_masked, vmin=0, vmax=1)
 
-    def masked_update(j):
-        for i in range(n_outputs - 2):
-            image_step_text_handles[i].set_text("t={}".format(j))
-            pix_distrib_step_text_handles[i].set_text("t={}".format(j))
-            if j == 0:
-                masked_image_handles[i].set_data(second_context_image)
-                masked_pix_distrib_handles[i].set_data(second_context_pix_distrib)
-                combined_image_handle.set_data(second_context_image)
-                combined_pix_distrib_handle.set_data(second_context_pix_distrib)
-            else:
-                masked_image_handles[i].set_data(np.clip(masked_images[i + 2], 0, 1))
-                masked_pix_distrib_handles[i].set_data(np.clip(masked_pix_distribs[i + 2], 0, 1))
-                combined_pix_distrib_handle.set_data(np.clip(gen_pix_distribs, 0, 1))
-                combined_image_handle.set_data(np.clip(gen_images, 0, 1))
+    axes[0, -1].set_title("combined image")
+    axes[0, -1].imshow(np.clip(gen_images, 0, 1), vmin=0, vmax=1)
+    axes[1, -1].set_title("combined pix\ndistrib")
+    axes[1, -1].imshow(np.clip(gen_pix_distribs, 0, 1), vmin=0, vmax=1)
 
-    masked_anim = FuncAnimation(fig, masked_update, frames=2, interval=1000, repeat=True)
+    ############################################
+    # Show the context image and the made-up maked image overlaid
+    ############################################
+    fig, axes = plt.subplots(nrows=1, ncols=3, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
+    for ax in axes.flatten():
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.axis("off")
+
+    axes[0].set_title("context image")
+    axes[0].imshow(second_context_image, vmin=0, vmax=1)
+    axes[1].set_title("made-up masked image")
+    axes[1].imshow(masked_made_up_image, vmin=0, vmax=1)
+    axes[2].set_title("combined")
+    combined = second_context_image + masked_made_up_image
+    norm_combined = combined / np.max(combined)
+    axes[2].imshow(norm_combined, vmin=0, vmax=1)
 
     ############################################
     # Show and save
     ############################################
     if args.outdir:
         transformed_image_anim.save(os.path.join(args.outdir, 'transformed_image_figure.gif'), writer='imagemagick', dpi=fig.dpi)
-        masked_anim.save(os.path.join(args.outdir, 'masked_image_figure.gif'), writer='imagemagick', dpi=fig.dpi)
         transformed_pix_distrib_anim.save(os.path.join(args.outdir, 'transformed_pix_distrib_figure.gif'), writer='imagemagick',
                                           dpi=fig.dpi)
 
+    plt.tight_layout()
     plt.show()
 
 
@@ -275,7 +300,7 @@ def setup_and_run(args, context_length):
     model.restore(sess, args.checkpoint)
 
     # source_pixel = gui_tools.get_source_pixel(context_images[1])
-    source_pixel = NumpyPoint(32, 32)
+    source_pixel = NumpyPoint(51, 11)
 
     context_pix_distribs = np.zeros((1, context_length, args.s, args.s, 1), dtype=np.float32)
     context_pix_distribs[0, 0, source_pixel.row, source_pixel.col] = 1.0

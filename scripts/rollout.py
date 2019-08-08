@@ -35,7 +35,7 @@ def main():
     parser.add_argument("actions", help='filename')
     parser.add_argument("checkpoint", help="directory with checkpoint or checkpoint name (e.g. checkpoint_dir/model-200000)")
     parser.add_argument("--results_dir", default='results', help="ignored if output_gif_dir is specified")
-    parser.add_argument("--model", type=str, help="model class name")
+    parser.add_argument("--model", type=str, help="model class name", default='sna')
     parser.add_argument("--model_hparams", type=str, help="a string of comma separated list of model hyperparameters")
     parser.add_argument("--fps", type=int, default=10)
     parser.add_argument("--seed", type=int, default=0)
@@ -61,7 +61,7 @@ def main():
     inputs_placeholders = build_placeholders(total_length, state_dim, action_dim, image_dim)
 
     context_pixel_distribs = np.zeros((1, context_length, image_dim[0], image_dim[1], 1), dtype=np.float32)
-    # we only need on context pixel distrib
+    context_pixel_distribs[0, 0, source_pixel.row, source_pixel.col] = 1.0
     context_pixel_distribs[0, 1, source_pixel.row, source_pixel.col] = 1.0
 
     model = build_model(args.checkpoint, args.model, args.model_hparams, context_length, inputs_placeholders, total_length)

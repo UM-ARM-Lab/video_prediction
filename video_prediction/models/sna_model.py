@@ -92,6 +92,12 @@ class Prediction_Model(object):
         self.actions = actions
         self.iter_num = iter_num
         self.conf = conf
+        print("[SNA Model Configuration]")
+        for k, v in self.conf.items():
+            if v == '':
+                print('\t{} (Yes)'.format(k))
+            else:
+                print('\t{}: {}'.format(k, v))
         self.images = images
 
         self.k = conf['schedsamp_k']
@@ -208,6 +214,7 @@ class Prediction_Model(object):
                 if 'transform_from_firstimage' in self.conf:
                     prev_image = self.images[1]
                     if self.pix_distributions1 is not None:
+                        # NOTE: is "previous_pix_distrib" the equivalent of the "made_up_image"?
                         prev_pix_distrib1 = self.pix_distributions1[1]
                         prev_pix_distrib1 = tf.expand_dims(prev_pix_distrib1, -1)
                     print('transform from image 1')
@@ -321,8 +328,8 @@ class Prediction_Model(object):
         return output, mask_list, outputs
 
     def mask_and_fuse_pix_distrib(self, extra_masks, mask_list, pix_distributions, prev_pix_distrib, transformed_pix_distrib):
-
         if 'first_image_background' in self.conf:
+            # Take the first image in from the pix_distribs tensor in feed_dict
             background_pix = pix_distributions[0]
             if len(background_pix.get_shape()) == 3:
                 background_pix = tf.expand_dims(background_pix, -1)
@@ -331,15 +338,27 @@ class Prediction_Model(object):
         pix_distrib_output = mask_list[0] * background_pix
         pix_distrib_outputs = [pix_distrib_output]
         if 'gen_pix' in self.conf:
-            gen_pix_masked = mask_list[1] * prev_pix_distrib  # assume pixels don't when image is generated from scratch
+            # if we are using the "made-up" image, then in the pixel distribution image we use the background image in place
+            # This is essentially saying that the image from which you should
+            # In theory the "made-up" image should be for regions of the image are no longer occluded,
+            # so the mask should indicate areas which are (recently) no longer occluded. When applied to the background image,
+            # we're essentially copying parts from the background image that are no longer occluded. This seems redundant with the
+            # other use of the background image. One interesting question is -- which of these does the model actually use?
+            gen_pix_masked = mask_list[1] * prev_pix_distrib
             pix_distrib_outputs.append(gen_pix_masked)
             pix_distrib_output += gen_pix_masked
         for i in range(self.num_masks):
             transformed_distrib_masked = transformed_pix_distrib[i] * mask_list[i + extra_masks]
             pix_distrib_outputs.append(transformed_distrib_masked)
             pix_distrib_output += transformed_distrib_masked
-        pix_distrib_output /= tf.reduce_sum(pix_distrib_output, axis=(1, 2), keepdims=True)
-        return pix_distrib_output, pix_distrib_outputs
+        pix_distrib_sum = tf.reduce_sum(pix_distrib_output, axis=(1, 2), keepdims=True)
+        pix_distrib_output /= pix_distrib_sum
+        # normalize the individual outputs the same way the combined output is normalized
+        normalized_pix_distrib_outputs = []
+        for pix_distrib_output_i in pix_distrib_outputs:
+            normalized_pix_distrib_output = pix_distrib_output_i / pix_distrib_sum
+            normalized_pix_distrib_outputs.append(normalized_pix_distrib_output)
+        return pix_distrib_output, normalized_pix_distrib_outputs
 
     def encoder_decoder_fn(self, action, batch_size, input_image, lstm_func, lstm_size, lstm_state1, lstm_state3, lstm_state5,
                            lstm_state6, lstm_state7, state_action):
