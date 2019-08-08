@@ -392,12 +392,8 @@ class Prediction_Model(object):
             else:
                 lowdim = state_action
 
-            smear = tf.reshape(
-                lowdim,
-                [int(batch_size), 1, 1, int(lowdim.get_shape()[1])])
-            smear = tf.tile(
-                smear, [1, int(enc2.get_shape()[1]), int(enc2.get_shape()[2]), 1])
-
+            smear = tf.reshape(lowdim, [int(batch_size), 1, 1, int(lowdim.get_shape()[1])])
+            smear = tf.tile(smear, [1, int(enc2.get_shape()[1]), int(enc2.get_shape()[2]), 1])
             enc2 = tf.concat(axis=3, values=[enc2, smear])
         else:
             print('ignoring states and actions')
