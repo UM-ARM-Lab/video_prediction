@@ -115,6 +115,7 @@ class Prediction_Model(object):
         self.gen_cdna_kernels = []
         self.gen_made_up_images = []
         self.gen_masked_images = []
+        self.gen_background_images = []
 
         self.transformed_images = []
 
@@ -122,10 +123,14 @@ class Prediction_Model(object):
         self.transformed_pix_distrib2 = []
 
         self.states = states
-        self.gen_distrib1 = []
+        self.gen_pix_distrib1 = []
+        self.gen_made_up_pix_distrib1 = []
+        self.gen_background_pix_distrib1 = []
         self.gen_masked_pix_distrib1 = []
-        self.gen_distrib2 = []
-        self.gen_distrib2_outputs = []
+        self.gen_pix_distrib2 = []
+        self.gen_made_up_pix_distrib2 = []
+        self.gen_background_pix_distrib2 = []
+        self.gen_masked_pix_distribs2 = []
 
         self.trafos = []
 
@@ -181,9 +186,9 @@ class Prediction_Model(object):
                     # Feed in generated image.
                     prev_image = self.gen_images[-1]  # 64x64x6
                     if self.pix_distributions1 is not None:
-                        prev_pix_distrib1 = self.gen_distrib1[-1]
+                        made_up_pix_distrib1 = self.gen_pix_distrib1[-1]
                         if 'ndesig' in self.conf:
-                            prev_pix_distrib2 = self.gen_distrib2[-1]
+                            prev_pix_distrib2 = self.gen_pix_distrib2[-1]
                 elif done_warm_start:
                     # Scheduled sampling
                     prev_image = scheduled_sample(self.images[t], self.gen_images[-1], batch_size, num_ground_truth)
@@ -191,11 +196,11 @@ class Prediction_Model(object):
                     # Always feed in ground_truth
                     prev_image = self.images[t]
                     if self.pix_distributions1 is not None:
-                        prev_pix_distrib1 = self.pix_distributions1[t]
+                        made_up_pix_distrib1 = self.pix_distributions1[t]
                         if 'ndesig' in self.conf:
                             prev_pix_distrib2 = self.pix_distributions2[t]
-                        if len(prev_pix_distrib1.get_shape()) == 3:
-                            prev_pix_distrib1 = tf.expand_dims(prev_pix_distrib1, -1)
+                        if len(made_up_pix_distrib1.get_shape()) == 3:
+                            made_up_pix_distrib1 = tf.expand_dims(made_up_pix_distrib1, -1)
                             if 'ndesig' in self.conf:
                                 prev_pix_distrib2 = tf.expand_dims(prev_pix_distrib2, -1)
 
@@ -215,8 +220,8 @@ class Prediction_Model(object):
                     prev_image = self.images[1]
                     if self.pix_distributions1 is not None:
                         # NOTE: is "previous_pix_distrib" the equivalent of the "made_up_image"?
-                        prev_pix_distrib1 = self.pix_distributions1[1]
-                        prev_pix_distrib1 = tf.expand_dims(prev_pix_distrib1, -1)
+                        made_up_pix_distrib1 = self.pix_distributions1[1]
+                        made_up_pix_distrib1 = tf.expand_dims(made_up_pix_distrib1, -1)
                     print('transform from image 1')
 
                 if self.conf['model'] == 'DNA':
@@ -230,21 +235,21 @@ class Prediction_Model(object):
                         # which is useful when regions of the image become unoccluded.
                         gen_made_up_image = tf.nn.sigmoid(enc7)
                         self.gen_made_up_images.append(gen_made_up_image)
-                        transformed_l = [gen_made_up_image]
+                        transformed_list = [gen_made_up_image]
                         extra_masks = 2
                     else:
-                        transformed_l = []
+                        transformed_list = []
                         extra_masks = 1
 
                     cdna_input = tf.reshape(hidden5, [int(batch_size), -1])
                     new_transformed, cdna_kerns_for_viz = self.cdna_transformation(prev_image, cdna_input, reuse_sc=reuse)
                     self.gen_cdna_kernels.append(cdna_kerns_for_viz)
-                    transformed_l += new_transformed
+                    transformed_list += new_transformed
                     # this does not include the background image, which is untransformed
-                    self.transformed_images.append(tf.stack(transformed_l, axis=1))
+                    self.transformed_images.append(tf.stack(transformed_list, axis=1))
 
                     if self.pix_distributions1 is not None:
-                        transf_distrib_ndesig1, _ = self.cdna_transformation(prev_pix_distrib1, cdna_input, reuse_sc=True)
+                        transf_distrib_ndesig1, _ = self.cdna_transformation(made_up_pix_distrib1, cdna_input, reuse_sc=True)
                         self.transformed_pix_distrib1.append(tf.stack(transf_distrib_ndesig1, axis=1))
                         if 'ndesig' in self.conf:
                             transf_distrib_ndesig2, _ = self.cdna_transformation(prev_pix_distrib2, cdna_input, reuse_sc=True)
@@ -259,34 +264,35 @@ class Prediction_Model(object):
                 else:
                     background = prev_image
 
-                masked_output, mask_list, masked_outputs = self.masked_and_fuse_transformed_images(enc6, background,
-                                                                                                   transformed_l,
-                                                                                                   scope='convt7_cam2',
-                                                                                                   extra_masks=extra_masks)
-                self.gen_masked_images.append(tf.stack(masked_outputs, axis=1))
-                self.gen_images.append(masked_output)
+                self.gen_background_images.append(background)
+                fused_images, mask_list, masked_images = self.mask_and_fuse_transformed_images(enc6, background,
+                                                                                              transformed_list,
+                                                                                              scope='convt7_cam2',
+                                                                                              extra_masks=extra_masks)
+                self.gen_masked_images.append(tf.stack(masked_images, axis=1))
+                self.gen_images.append(fused_images)
                 self.gen_masks.append(tf.stack(mask_list, axis=1))
 
                 if self.pix_distributions1 is not None:
-                    pix_distrib_output, pix_distrib_outputs = self.mask_and_fuse_pix_distrib(extra_masks,
-                                                                                             mask_list,
-                                                                                             self.pix_distributions1,
-                                                                                             prev_pix_distrib1,
-                                                                                             transf_distrib_ndesig1)
+                    mask_fuse_pix_distrib1_result = self.mask_and_fuse_transformed_pix_distribs(extra_masks,
+                                                                                                mask_list,
+                                                                                                self.pix_distributions1,
+                                                                                                made_up_pix_distrib1,
+                                                                                                transf_distrib_ndesig1)
+                    background_pix1 = mask_fuse_pix_distrib1_result[0]
+                    made_up_pix_distrib1 = mask_fuse_pix_distrib1_result[1]
+                    # the masked version of the made-up pix is in the 0th element of masked_pix_distribs1
+                    masked_pix_distribs1 = mask_fuse_pix_distrib1_result[2]
+                    fused_pix_distrib1 = mask_fuse_pix_distrib1_result[3]
 
-                    self.gen_distrib1.append(pix_distrib_output)
-                    self.gen_masked_pix_distrib1.append(tf.stack(pix_distrib_outputs, axis=1))
+                    self.gen_pix_distrib1.append(fused_pix_distrib1)
+                    self.gen_made_up_pix_distrib1.append(made_up_pix_distrib1)
+                    self.gen_background_pix_distrib1.append(background_pix1)
+                    self.gen_masked_pix_distrib1.append(tf.stack(masked_pix_distribs1, axis=1))
                     # ndeign means there are two "designated" source/target pixel pairs
                     # this code base only supports one or two pixel pairs
                     if 'ndesig' in self.conf:
-                        pix_distrib_output, pix_distrib_outputs = self.mask_and_fuse_pix_distrib(extra_masks,
-                                                                                                 mask_list,
-                                                                                                 self.pix_distributions2,
-                                                                                                 prev_pix_distrib2,
-                                                                                                 transf_distrib_ndesig2)
-
-                        self.gen_distrib2.append(pix_distrib_output)
-                        self.gen_distrib2_outputs.append(pix_distrib_output)
+                        raise NotImplementedError()
 
                 if int(current_state.get_shape()[1]) == 0:
                     current_state = tf.zeros_like(state_action)
@@ -299,7 +305,7 @@ class Prediction_Model(object):
 
                 self.gen_states.append(current_state)
 
-    def masked_and_fuse_transformed_images(self, enc6, background_image, transformed, scope, extra_masks):
+    def mask_and_fuse_transformed_images(self, enc6, background_image, transformed, scope, extra_masks):
         masks = slim.layers.conv2d_transpose(enc6, (self.conf['num_masks'] + extra_masks), 1, stride=1, activation_fn=None,
                                              scope=scope)
 
@@ -315,19 +321,19 @@ class Prediction_Model(object):
             tf.nn.softmax(tf.reshape(masks, [-1, num_masks + extra_masks])),
             [int(self.batch_size), int(img_height), int(img_width), num_masks + extra_masks])
         mask_list = tf.split(axis=3, num_or_size_splits=num_masks + extra_masks, value=masks)
-        output = mask_list[0] * background_image
+        fused_image = mask_list[0] * background_image
 
         assert len(transformed) == len(mask_list[1:])
-        outputs = [output]
+        masked_images = [fused_image]
         # the same transformations are applied to all channels of the image
         # this list includes the "made-up" image
         for layer, mask in zip(transformed, mask_list[1:]):
-            outputs.append(layer * mask)
-            output += layer * mask
+            masked_images.append(layer * mask)
+            fused_image += layer * mask
 
-        return output, mask_list, outputs
+        return fused_image, mask_list, masked_images
 
-    def mask_and_fuse_pix_distrib(self, extra_masks, mask_list, pix_distributions, prev_pix_distrib, transformed_pix_distrib):
+    def mask_and_fuse_transformed_pix_distribs(self, extra_masks, mask_list, pix_distributions, prev_pix_distrib, transformed_pix_distrib):
         if 'first_image_background' in self.conf:
             # Take the first image in from the pix_distribs tensor in feed_dict
             background_pix = pix_distributions[0]
@@ -335,8 +341,8 @@ class Prediction_Model(object):
                 background_pix = tf.expand_dims(background_pix, -1)
         else:
             background_pix = prev_pix_distrib
-        pix_distrib_output = mask_list[0] * background_pix
-        pix_distrib_outputs = [pix_distrib_output]
+        fused_pix_distrib = mask_list[0] * background_pix
+        masked_pix_distribs = [fused_pix_distrib]
         if 'gen_pix' in self.conf:
             # if we are using the "made-up" image, then in the pixel distribution image we use the background image in place
             # This is essentially saying that the image from which you should
@@ -344,21 +350,26 @@ class Prediction_Model(object):
             # so the mask should indicate areas which are (recently) no longer occluded. When applied to the background image,
             # we're essentially copying parts from the background image that are no longer occluded. This seems redundant with the
             # other use of the background image. One interesting question is -- which of these does the model actually use?
-            gen_pix_masked = mask_list[1] * prev_pix_distrib
-            pix_distrib_outputs.append(gen_pix_masked)
-            pix_distrib_output += gen_pix_masked
+            made_up_pix_distrib = prev_pix_distrib
+            masked_made_up_pix_distrib = mask_list[1] * made_up_pix_distrib
+            masked_pix_distribs.append(masked_made_up_pix_distrib)
+            fused_pix_distrib += masked_made_up_pix_distrib
+        else:
+            made_up_pix_distrib = None
         for i in range(self.num_masks):
-            transformed_distrib_masked = transformed_pix_distrib[i] * mask_list[i + extra_masks]
-            pix_distrib_outputs.append(transformed_distrib_masked)
-            pix_distrib_output += transformed_distrib_masked
-        pix_distrib_sum = tf.reduce_sum(pix_distrib_output, axis=(1, 2), keepdims=True)
-        pix_distrib_output /= pix_distrib_sum
+            masked_transformed_pix_distrib = transformed_pix_distrib[i] * mask_list[i + extra_masks]
+            masked_pix_distribs.append(masked_transformed_pix_distrib)
+            fused_pix_distrib += masked_transformed_pix_distrib
+        pix_distrib_sum = tf.reduce_sum(fused_pix_distrib, axis=(1, 2), keepdims=True)
+        fused_pix_distrib /= pix_distrib_sum
         # normalize the individual outputs the same way the combined output is normalized
-        normalized_pix_distrib_outputs = []
-        for pix_distrib_output_i in pix_distrib_outputs:
-            normalized_pix_distrib_output = pix_distrib_output_i / pix_distrib_sum
-            normalized_pix_distrib_outputs.append(normalized_pix_distrib_output)
-        return pix_distrib_output, normalized_pix_distrib_outputs
+        normalized_masked_pix_distribs = []
+        for masked_pix_distrib in masked_pix_distribs:
+            normalized_pix_distrib_output = masked_pix_distrib / pix_distrib_sum
+            normalized_masked_pix_distribs.append(normalized_pix_distrib_output)
+        # prev_pix_distrib is what's used in place of the "made-up" image, and will either be the previous predicted pix_distrib
+        # or (in our usage) the first context pix_distrib
+        return background_pix, made_up_pix_distrib, normalized_masked_pix_distribs, fused_pix_distrib
 
     def encoder_decoder_fn(self, action, batch_size, input_image, lstm_func, lstm_size, lstm_state1, lstm_state3, lstm_state5,
                            lstm_state6, lstm_state7, state_action):
@@ -533,16 +544,25 @@ def generator_fn(inputs, mode, hparams):
     outputs = {
         'gen_cdna_kernels': tf.stack(m.gen_cdna_kernels, axis=0),
         'gen_masks': tf.stack(m.gen_masks, axis=0),
-        'gen_made_up_images': tf.stack(m.gen_made_up_images, axis=0),
         'gen_transformed_images': tf.stack(m.transformed_images, axis=0),
         'gen_masked_images': tf.stack(m.gen_masked_images, axis=0),
+        'gen_background_images': tf.stack(m.gen_background_images, axis=0),
         'gen_images': tf.stack(m.gen_images, axis=0),
         'gen_states': tf.stack(m.gen_states, axis=0),
     }
+    if hparams.generate_scratch_image:
+        outputs['gen_made_up_images'] = tf.stack(m.gen_made_up_images, axis=0)
+        outputs['gen_made_up_pix_distribs'] = tf.stack(m.gen_made_up_pix_distrib1, axis=0)
+    else:
+        outputs['gen_made_up_images'] = None
+        outputs['gen_made_up_pix_distribs'] = None
+
     if 'pix_distribs' in inputs:
-        outputs['gen_masked_pix_distribs'] = tf.stack(m.gen_masked_pix_distrib1, axis=0)
+        # TODO: support more than one pix pair
+        outputs['gen_pix_distribs'] = tf.stack(m.gen_pix_distrib1, axis=0)
+        outputs['gen_background_pix_distribs'] = tf.stack(m.gen_background_pix_distrib1, axis=0)
         outputs['gen_transformed_pix_distribs'] = tf.stack(m.transformed_pix_distrib1, axis=0)
-        outputs['gen_pix_distribs'] = tf.stack(m.gen_distrib1, axis=0)
+        outputs['gen_masked_pix_distribs'] = tf.stack(m.gen_masked_pix_distrib1, axis=0)
     return outputs
 
 
