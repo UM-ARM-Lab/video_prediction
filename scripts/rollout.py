@@ -8,6 +8,7 @@ import os
 import random
 
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 import tensorflow as tf
 from matplotlib.animation import FuncAnimation
@@ -96,13 +97,24 @@ def main():
     ##########
     # Plotting
     ##########
+    # Configure matplotlib
+    mpl.rcParams['figure.subplot.wspace'] = 0.1
+    mpl.rcParams['figure.subplot.hspace'] = 0.1
+    mpl.rcParams['figure.titlesize'] = 7
+    mpl.rcParams['figure.figsize'] = (9.3, 7)
+    mpl.rcParams['figure.dpi'] = 100
+    mpl.rcParams['axes.formatter.useoffset'] = False
+    mpl.rcParams['figure.facecolor'] = 'white'
+    mpl.rcParams['figure.titlesize'] = 7
+    mpl.rcParams['legend.facecolor'] = 'white'
+    mpl.rcParams['font.size'] = 7
     fig, axes = plt.subplots(nrows=1, ncols=3)
 
     axes[0].set_title("prediction [image]")
     image_handle = axes[0].imshow(full_image_sequence[0], cmap='rainbow')
 
     axes[1].set_title("prediction [pix distrib]")
-    axes[1].scatter(target_pixel.col, target_pixel.row, marker='D', c='y', s=5)
+    axes[1].scatter(target_pixel.col, target_pixel.row, marker='D', c='y', s=3, alpha=0.5)
     pix_distrib_handle = axes[1].imshow(full_pix_distrib_sequence[0], cmap='rainbow')
     axes[2].set_title("P(selected pixel)")
     axes[2].set_xlabel("time (step #)")
@@ -144,11 +156,13 @@ def main():
 
     fig.canvas.mpl_connect('key_release_event', on_key_release)
 
-    plt.show()
-
     if args.outdir:
         anim = FuncAnimation(fig, update, frames=sequence_length, interval=1000 / args.fps, repeat=True)
         anim.save(os.path.join(args.outdir, 'rollout.gif'), writer='imagemagick')
+        del anim  # this makes it so the animation will stop running, so that the arrow keys can work
+        t = 0
+
+    plt.show()
 
 
 if __name__ == '__main__':
