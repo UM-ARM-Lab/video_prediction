@@ -48,13 +48,13 @@ def main():
     actions_length, action_dim = actions.shape
     _, state_dim = context_states.shape
     _, h, w, d = context_images.shape
-    inputs_placeholders = build_placeholders(context_length, actions_length, h, w, d, state_dim, action_dim)
+    placeholders, sequence_length = build_placeholders(context_length, actions_length, h, w, d, state_dim, action_dim)
 
     context_pixel_distribs = np.zeros((1, context_length, h, w, 1), dtype=np.float32)
     context_pixel_distribs[0, 0, source_pixel0.row, source_pixel0.col] = 1.0
     context_pixel_distribs[0, 1, source_pixel1.row, source_pixel1.col] = 1.0
 
-    model, sequence_length = build_model(args.checkpoint, args.model, args.model_hparams, inputs_placeholders, context_length)
+    model = build_model(args.checkpoint, args.model, args.model_hparams, placeholders, context_length, sequence_length)
 
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
     config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
@@ -63,7 +63,7 @@ def main():
 
     model.restore(sess, args.checkpoint)
 
-    feed_dict = build_feed_dict(inputs_placeholders, context_images, context_states, context_pixel_distribs, actions,
+    feed_dict = build_feed_dict(placeholders, context_images, context_states, context_pixel_distribs, actions,
                                 sequence_length)
     fetches = {
         'gen_images': model.outputs['gen_images'],
@@ -100,8 +100,7 @@ def main():
         pix_distrib_handle.set_data(gen_pix_distribs[t])
         image_handle.set_data(np.clip(gen_images[t], 0, 1))
 
-    # TODO: get sequence_length here
-    anim = FuncAnimation(fig, update, frames=actions_length + 1, interval=1000 / args.fps, repeat=True)
+    anim = FuncAnimation(fig, update, frames=sequence_length, interval=1000 / args.fps, repeat=True)
 
     if args.outdir:
         anim.save(os.path.join(args.outdir, 'rollout.gif'), writer='imagemagick')

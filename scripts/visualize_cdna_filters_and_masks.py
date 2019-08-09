@@ -412,7 +412,7 @@ def setup_and_run(args, context_length):
 
     placeholders, sequence_length = build_placeholders(context_length, actions_length, h, w, d, state_dim, action_dim)
 
-    model = build_model(args.checkpoint, args.model, args.model_hparams, placeholders, context_length)
+    model = build_model(args.checkpoint, args.model, args.model_hparams, placeholders, context_length, sequence_length)
 
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
     config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
