@@ -79,7 +79,7 @@ def main():
         made_up_masked_images = None
         made_up_pix_distrib_masked = None
 
-    if args.t <= context_length:
+    if args.t < context_length:
         prev_image = results['input_images'][0, args.t].squeeze()
         prev_pix_distrib = results['input_pix_distribs'][0, args.t].squeeze()
     else:

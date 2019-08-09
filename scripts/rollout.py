@@ -43,7 +43,7 @@ def main():
 
     context_states, context_images, actions = load_data(args.images, args.states, args.actions)
     source_pixel0 = gui_tools.get_source_pixel(context_images[0])
-    source_pixel1 = gui_tools.get_source_pixel(context_images[1])
+    source_pixel1, target_pixel = gui_tools.get_pixels(context_images[1])
 
     actions_length, action_dim = actions.shape
     _, state_dim = context_states.shape
@@ -75,8 +75,6 @@ def main():
     }
     results = sess.run(fetches, feed_dict=feed_dict)
 
-    fig, axes = plt.subplots(nrows=1, ncols=2)
-
     # there is a choice of how to combine context and generate frames, but I'm going to
     # choose the prettier one which is to show all the context images and leave our the gen_images
     # which are for the same time steps
@@ -87,25 +85,70 @@ def main():
     gen_images = results['gen_images'][0, context_length - 1:].squeeze()
     gen_pix_distribs = results['gen_pix_distribs'][0, context_length - 1:].squeeze()
 
-    gen_images = np.concatenate((context_images, gen_images))
-    gen_pix_distribs = np.concatenate((context_pix_distribs, gen_pix_distribs))
+    full_image_sequence = np.concatenate((context_images, gen_images))
+    full_pix_distrib_sequence = np.concatenate((context_pix_distribs, gen_pix_distribs))
+
+    time_data = np.arange(full_pix_distrib_sequence.shape[0])
+    probability_of_designated_pixel = np.zeros(full_pix_distrib_sequence.shape[0])
+    for t, pix_distrib in enumerate(full_pix_distrib_sequence):
+        probability_of_designated_pixel[t] = pix_distrib[source_pixel1.row, source_pixel1.col]
+
+    ##########
+    # Plotting
+    ##########
+    fig, axes = plt.subplots(nrows=1, ncols=3)
 
     axes[0].set_title("prediction [image]")
-    image_handle = axes[0].imshow(gen_images[0], cmap='rainbow')
+    image_handle = axes[0].imshow(full_image_sequence[0], cmap='rainbow')
 
     axes[1].set_title("prediction [pix distrib]")
-    pix_distrib_handle = axes[1].imshow(gen_pix_distribs[0], cmap='rainbow')
+    axes[1].scatter(target_pixel.col, target_pixel.row, marker='D', c='y', s=5)
+    pix_distrib_handle = axes[1].imshow(full_pix_distrib_sequence[0], cmap='rainbow')
+    axes[2].set_title("P(selected pixel)")
+    axes[2].set_xlabel("time (step #)")
+    axes[2].set_ylabel("probability of designated pixel")
+    axes[2].plot(time_data, probability_of_designated_pixel)
+    axes[2].set_xlim(0, sequence_length - 1)
+    axes[2].set_ylim(0, 1)
+    axes[2].set_aspect(sequence_length - 1)
+    current_probability_scatter_handle = axes[2].scatter(0, 1, s=20, c='r')
+
+    axes[0].set_xticks([])
+    axes[0].set_yticks([])
+    axes[0].axis("off")
+    axes[1].set_xticks([])
+    axes[1].set_yticks([])
+    axes[1].axis("off")
 
     def update(t):
-        pix_distrib_handle.set_data(gen_pix_distribs[t])
-        image_handle.set_data(np.clip(gen_images[t], 0, 1))
+        pix_distrib_handle.set_data(full_pix_distrib_sequence[t])
+        image_handle.set_data(np.clip(full_image_sequence[t], 0, 1))
 
-    anim = FuncAnimation(fig, update, frames=sequence_length, interval=1000 / args.fps, repeat=True)
+        current_probability_scatter_handle.set_offsets([time_data[t], probability_of_designated_pixel[t]])
 
-    if args.outdir:
-        anim.save(os.path.join(args.outdir, 'rollout.gif'), writer='imagemagick')
+    t = 0
+
+    def on_key_release(event):
+        nonlocal t
+        if event.key == 'right':
+            if t < sequence_length - 1:
+                t += 1
+        if event.key == 'left':
+            if t > 0:
+                t -= 1
+
+        update(t)
+
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+
+    fig.canvas.mpl_connect('key_release_event', on_key_release)
 
     plt.show()
+
+    if args.outdir:
+        anim = FuncAnimation(fig, update, frames=sequence_length, interval=1000 / args.fps, repeat=True)
+        anim.save(os.path.join(args.outdir, 'rollout.gif'), writer='imagemagick')
 
 
 if __name__ == '__main__':
