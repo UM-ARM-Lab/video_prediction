@@ -329,7 +329,7 @@ class VideoDataset(BaseVideoDataset):
         super(VideoDataset, self).__init__(*args, **kwargs)
         self._dict_message = None
 
-    def _check_or_infer_shapes(self):
+    def _infer_seq_length_and_setup(self):
         """
         Should be called after state_like_names_and_shapes and
         action_like_names_and_shapes have been finalized.

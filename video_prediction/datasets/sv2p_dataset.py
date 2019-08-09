@@ -18,7 +18,7 @@ class SV2PVideoDataset(VideoDataset):
                 raise ValueError('SV2PVideoDataset does not have states, use_state should be False')
         else:
             raise NotImplementedError
-        self._check_or_infer_shapes()
+        self._infer_seq_length_and_setup()
 
     def get_default_hparams_dict(self):
         default_hparams = super(SV2PVideoDataset, self).get_default_hparams_dict()

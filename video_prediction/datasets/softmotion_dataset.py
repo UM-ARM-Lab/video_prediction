@@ -35,13 +35,13 @@ class SoftmotionVideoDataset(VideoDataset):
                 image_name = image_names.pop()
             else:
                 raise ValueError('The examples have images under more than one name.')
-        self.state_like_names_and_shapes['images'] = '%%d/%s/encoded' % image_name, (64, 64, 3)
+        self.state_like_names_and_shapes['images'] = '%%d/%s/encoded' % image_name, self.hparams.image_shape
         if self.hparams.use_state:
             self.state_like_names_and_shapes['states'] = '%d/endeffector_pos', (3,)
             self.action_like_names_and_shapes['actions'] = '%d/action', (4,)
         if any([re.search('\d+/object_pos', name) for name in feature.keys()]):
             self.state_like_names_and_shapes['object_pos'] = '%d/object_pos', None  # shape is (2 * num_designated_pixels)
-        self._check_or_infer_shapes()
+        self._infer_seq_length_and_setup()
 
     def get_default_hparams_dict(self):
         default_hparams = super(SoftmotionVideoDataset, self).get_default_hparams_dict()
@@ -50,6 +50,7 @@ class SoftmotionVideoDataset(VideoDataset):
             sequence_length=12,
             long_sequence_length=30,
             time_shift=2,
+            image_shape=[64, 64, 3],
         )
         return dict(itertools.chain(default_hparams.items(), hparams.items()))
 

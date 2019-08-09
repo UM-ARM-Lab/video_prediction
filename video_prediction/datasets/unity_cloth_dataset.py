@@ -36,7 +36,7 @@ class UnityClothDataset(VideoDataset):
         if self.hparams.use_state:
             self.state_like_names_and_shapes['states'] = '%d/endeffector_pos', (6,)
             self.action_like_names_and_shapes['actions'] = '%d/action', (3,)
-        self._check_or_infer_shapes()
+        self._infer_seq_length_and_setup()
 
     def get_default_hparams_dict(self):
         default_hparams = super(UnityClothDataset, self).get_default_hparams_dict()

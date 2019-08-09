@@ -14,7 +14,7 @@ class GoogleRobotVideoDataset(VideoDataset):
         if self.hparams.use_state:
             self.state_like_names_and_shapes['states'] = 'move/%d/endeffector/vec_pitch_yaw', (5,)
             self.action_like_names_and_shapes['actions'] = 'move/%d/commanded_pose/vec_pitch_yaw', (5,)
-        self._check_or_infer_shapes()
+        self._infer_seq_length_and_setup()
 
     def get_default_hparams_dict(self):
         default_hparams = super(GoogleRobotVideoDataset, self).get_default_hparams_dict()

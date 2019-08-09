@@ -38,7 +38,7 @@ class LinkBotVideoDataset(VideoDataset):
             self.state_like_names_and_shapes['states'] = '%d/endeffector_pos', (2,)
             self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
         self.state_like_names_and_shapes['constraints'] = '%d/constraint', (1,)
-        self._check_or_infer_shapes()
+        self._infer_seq_length_and_setup()
 
     def get_default_hparams_dict(self):
         default_hparams = super(LinkBotVideoDataset, self).get_default_hparams_dict()
