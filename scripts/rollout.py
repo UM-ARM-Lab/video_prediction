@@ -37,7 +37,7 @@ def main():
     parser.add_argument("--results_dir", default='results', help="ignored if output_gif_dir is specified")
     parser.add_argument("--model", type=str, help="model class name", default='sna')
     parser.add_argument("--model_hparams", type=str, help="a string of comma separated list of model hyperparameters")
-    parser.add_argument("--fps", type=int, default=10)
+    parser.add_argument("--fps", type=int, default=2)
     parser.add_argument("--seed", type=int, default=0)
 
     args = parser.parse_args()

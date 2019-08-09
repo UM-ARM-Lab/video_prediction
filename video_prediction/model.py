@@ -61,7 +61,7 @@ class VisualPredictionModel:
         padded_context_images[0, : self.context_length] = context_images
         padded_context_states[0, : self.context_length] = context_states
         padded_context_pixel_images[0, : self.context_length] = context_pixel_images
-        padded_actions[0, self.context_length - 1: -1] = actions
+        padded_actions[0] = actions
 
         feed_dict = {
             self.placeholders['states']: padded_context_states,
@@ -96,7 +96,7 @@ class VisualPredictionModel:
         padded_actions = np.zeros([1, self.total_length, self.action_dim], np.float32)
         padded_context_states[0, : self.context_length] = context_states
         padded_context_images[0, : self.context_length] = context_images
-        padded_actions[0, self.context_length - 1: -1] = actions
+        padded_actions[0] = actions
 
         feed_dict = {
             self.placeholders['states']: padded_context_states,
@@ -164,13 +164,21 @@ def build_model(checkpoint, model_str, model_hparams, context_length, input_plac
 
 
 def visualize_image_rollout(results, context_length, args, show_state=False):
+    for k, v in results.items():
+        print("{:40s}: {}".format(k, v.shape))
+
     # first dimension is batch size, second is time
     context_images = (results['input_images'][0, :context_length] * 255.0).astype(np.uint8)
     context_states = results['input_states'][0, :context_length]
-    gen_images = (results['gen_images'][0, context_length:] * 255.0).astype(np.uint8)
-    gen_states = results['gen_states'][0, context_length:]
+    # FIXME: no need to do the 255 I believe
+    gen_images = (results['gen_images'][0] * 255.0).astype(np.uint8)
+    gen_states = results['gen_states'][0]
 
+    # there is a choice of how to combine context and generate frames, but I'm going to
+    # choose the prettier one which isto show all the context images and leave our the gen_images
+    # which are for the same time steps
     gen_images = np.concatenate((context_images, gen_images))
+    gen_states = np.concatenate((context_states, gen_states))
 
     # Plot trajectory in states space
     # FIXME: this assumes 2d state
@@ -208,7 +216,12 @@ def visualize_image_rollout(results, context_length, args, show_state=False):
 
 
 def visualize_pixel_rollout(results, context_length, source_pixel, args):
-    gen_pix_distribs = (results['gen_pix_distribs'][0, 1:])
+    gen_pix_distribs = results['gen_pix_distribs'][0, context_length:]
+    context_pix_distribs = results['pix_distribs'][0, :context_length]
+
+    gen_pix_distribs = np.concatenate((context_pix_distribs, gen_pix_distribs))
+    for k, v in results.items():
+        print("{:40s}: {}".format(k, v.shape))
 
     fig, ax = plt.subplots()
     ax.set_title("prediction [pix distrib]")
