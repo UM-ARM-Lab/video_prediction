@@ -171,8 +171,8 @@ class Prediction_Model(object):
             ngf = self.conf['ngf']
             lstm_size = np.int32(np.array([ngf, ngf * 2, ngf * 4, ngf * 2, ngf]))
 
-        lstm_state1, lstm_state2, lstm_state3, lstm_state4 = None, None, None, None
-        lstm_state5, lstm_state6, lstm_state7 = None, None, None
+        # TODO: better abstraction here, also 2, 4 are not used?!
+        lstm_states = [None] * 7
 
         for t, action in enumerate(self.actions):
             # Reuse variables after the first timestep.
@@ -213,8 +213,8 @@ class Prediction_Model(object):
                 if not 'ignore_state_action' in self.conf:
                     state_action = tf.concat(axis=1, values=[action, current_state])
 
-                enc6, hidden5 = self.encoder_decoder_fn(action, batch_size, input_image, lstm_func, lstm_size, lstm_state1,
-                                                        lstm_state3, lstm_state5, lstm_state6, lstm_state7, state_action)
+                enc6, hidden5, lstm_states = self.encoder_decoder_fn(action, batch_size, input_image, lstm_func, lstm_size,
+                                                                     lstm_states, state_action)
 
                 if 'transform_from_firstimage' in self.conf:
                     prev_image = self.images[1]
@@ -267,9 +267,9 @@ class Prediction_Model(object):
                 self.gen_background_images.append(background)
                 # the first image in masked_images will be the masked background image
                 fused_images, mask_list, masked_images = self.mask_and_fuse_transformed_images(enc6, background,
-                                                                                              transformed_list,
-                                                                                              scope='convt7_cam2',
-                                                                                              extra_masks=extra_masks)
+                                                                                               transformed_list,
+                                                                                               scope='convt7_cam2',
+                                                                                               extra_masks=extra_masks)
                 self.gen_masked_images.append(tf.stack(masked_images, axis=1))
                 self.gen_images.append(fused_images)
                 self.gen_masks.append(tf.stack(mask_list, axis=1))
@@ -334,7 +334,8 @@ class Prediction_Model(object):
 
         return fused_image, mask_list, masked_images
 
-    def mask_and_fuse_transformed_pix_distribs(self, extra_masks, mask_list, pix_distributions, prev_pix_distrib, transformed_pix_distrib):
+    def mask_and_fuse_transformed_pix_distribs(self, extra_masks, mask_list, pix_distributions, prev_pix_distrib,
+                                               transformed_pix_distrib):
         if 'first_image_background' in self.conf:
             # Take the first image in from the pix_distribs tensor in feed_dict
             background_pix = pix_distributions[0]
@@ -372,13 +373,14 @@ class Prediction_Model(object):
         # or (in our usage) the first context pix_distrib
         return background_pix, made_up_pix_distrib, normalized_masked_pix_distribs, fused_pix_distrib
 
-    def encoder_decoder_fn(self, action, batch_size, input_image, lstm_func, lstm_size, lstm_state1, lstm_state3, lstm_state5,
-                           lstm_state6, lstm_state7, state_action):
+    def encoder_decoder_fn(self, action, batch_size, input_image, lstm_func, lstm_size, lstm_states, state_action):
         """
         :return:
             enc6: the representation use to construct the masks
             hidden5: the representation use to construct the CDNA kernels
+            lstm_states: hidden lstm states
         """
+        lstm_state1, lstm_state2, lstm_state3, lstm_state4, lstm_state5, lstm_state6, lstm_state7 = lstm_states
         enc0 = slim.layers.conv2d(  # 32x32x32
             input_image,
             32, [5, 5],
@@ -435,7 +437,8 @@ class Prediction_Model(object):
             hidden7.get_shape()[3], 3, stride=2, scope='convt3',
             normalizer_fn=tf_layers.layer_norm,
             normalizer_params={'scope': 'layer_norm9'})
-        return enc6, hidden5
+        lstm_states = lstm_state1, lstm_state2, lstm_state3, lstm_state4, lstm_state5, lstm_state6, lstm_state7
+        return enc6, hidden5, lstm_states
 
     def cdna_transformation(self, prev_image, cdna_input, reuse_sc=None):
         """Apply convolutional dynamic neural advection to previous image.
