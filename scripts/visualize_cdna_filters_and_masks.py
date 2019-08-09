@@ -9,7 +9,7 @@ import tensorflow as tf
 from matplotlib.animation import FuncAnimation
 
 from video_prediction import load_data
-from video_prediction.model import build_model, build_placeholders
+from video_prediction.model_for_planning import build_model, build_placeholders, build_feed_dict
 # noinspection PyUnresolvedReferences
 from visual_mpc import gui_tools
 # noinspection PyUnresolvedReferences
@@ -405,19 +405,15 @@ def cdna_image_viz(kernels: np.ndarray,
 
 def setup_and_run(args, context_length):
     context_states, context_images, actions = load_data(args.images, args.states, args.actions)
+
     actions_length, action_dim = actions.shape
-    state_dim = 2
-    image_dim = [args.s, args.s, 3]
-    # NOTE: We don't add context_length because that is not how action are fed in. The first action is supposed to be the action
-    # that transitions from the first context image to the second context image. Therefore, regardless of the context length,
-    # the total number of predicted images will always be 1+ the number of actions. This of course means there's two ways
-    # to construct an output sequestion:
-    # 1) take the first context image and the rest of the generate images
-    # 1) all the context images and only the images generate after the context images (i.e. warm start done)
-    total_length = 1 + actions_length
-    print('Total Time Length:', total_length)
-    inputs_placeholders = build_placeholders(total_length, actions_length, state_dim, action_dim, image_dim)
-    model = build_model(args.checkpoint, args.model, args.model_hparams, context_length, inputs_placeholders, total_length)
+    _, h, w, d = context_images.shape
+    _, state_dim = context_states.shape
+
+    placeholders, sequence_length = build_placeholders(context_length, actions_length, h, w, d, state_dim, action_dim)
+
+    model = build_model(args.checkpoint, args.model, args.model_hparams, placeholders, context_length)
+
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
     config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
     sess = tf.Session(config=config)
@@ -431,22 +427,8 @@ def setup_and_run(args, context_length):
     context_pix_distribs[0, 0, source_pixel.row, source_pixel.col] = 1.0
     context_pix_distribs[0, 1, source_pixel.row, source_pixel.col] = 1.0
 
-    padded_context_states = np.zeros([1, total_length, state_dim], np.float32)
-    padded_context_images = np.zeros([1, total_length, args.s, args.s, 3], np.float32)
-    padded_context_pix_distribs = np.zeros([1, total_length, args.s, args.s, 1], np.float32)
-    padded_actions = np.zeros([1, actions_length, action_dim], np.float32)
+    feed_dict = build_feed_dict(placeholders, context_images, context_states, context_pix_distribs, actions, sequence_length)
 
-    padded_context_states[0, :context_length] = context_states
-    padded_context_images[0, :context_length] = context_images
-    padded_context_pix_distribs[0, :context_length] = context_pix_distribs
-    padded_actions[0] = actions
-
-    feed_dict = {
-        inputs_placeholders['states']: padded_context_states,
-        inputs_placeholders['images']: padded_context_images,
-        inputs_placeholders['pix_distribs']: padded_context_pix_distribs,
-        inputs_placeholders['actions']: padded_actions,
-    }
     fetches = {
         'input_images': model.inputs['images'],
         'input_pix_distribs': model.inputs['pix_distribs'],

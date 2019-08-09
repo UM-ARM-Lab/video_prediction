@@ -13,7 +13,7 @@ import numpy as np
 import tensorflow as tf
 from colorama import Fore
 
-from video_prediction.model import visualize_pixel_rollout, build_model, build_placeholders
+from video_prediction.model_for_planning import visualize_pixel_rollout, build_model, build_placeholders
 from visual_mpc.numpy_point import NumpyPoint
 
 

@@ -81,12 +81,11 @@ class BaseVideoPredictionModel(object):
         Returns:
             A dict with the following hyperparameters.
 
-            context_frames: the number of ground-truth frames to pass in at
-                start. Must be specified during instantiation.
-            sequence_length: the number of frames in the video sequence,
-                including the context frames, so this model predicts
-                `sequence_length - context_frames` future frames. Must be
-                specified during instantiation.
+            context_frames: the number of ground-truth frames to pass in at start. Must be specified during instantiation.
+            sequence_length: the number of frames in the video sequence, including the context frames,
+                so this model predicts `sequence_length - context_frames` future frames, and 'sequence_length - 1` total frames,
+                since the first generated frame is for the same time as the second context frame.
+                Must be specified during instantiation.
             repeat: the number of repeat actions (if applicable).
         """
         hparams = dict(
