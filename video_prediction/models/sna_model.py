@@ -135,12 +135,6 @@ class Prediction_Model(object):
         self.trafos = []
 
     def build(self):
-
-        if 'kern_size' in self.conf.keys():
-            KERN_SIZE = self.conf['kern_size']
-        else:
-            KERN_SIZE = 5
-
         batch_size, img_height, img_width, color_channels = self.images[0].get_shape()[0:4]
         lstm_func = basic_conv_lstm_cell
 
@@ -163,7 +157,6 @@ class Prediction_Model(object):
             feed_self = False
 
         # LSTM state sizes and states.
-
         if 'lstm_size' in self.conf:
             lstm_size = self.conf['lstm_size']
             print('using lstm size', lstm_size)

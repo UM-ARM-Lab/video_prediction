@@ -26,7 +26,7 @@ def main():
     parser.add_argument("states", help='filename')
     parser.add_argument("actions", help='filename')
     parser.add_argument("checkpoint", help="directory with checkpoint or checkpoint name (e.g. checkpoint_dir/model-200000)")
-    parser.add_argument("--outdir", default='results', help="ignored if output_gif_dir is specified")
+    parser.add_argument("--outdir", help="ignored if output_gif_dir is specified")
     parser.add_argument("--model", type=str, help="model class name", default='sna')
     parser.add_argument("--model_hparams", type=str, help="a string of comma separated list of model hyperparameters")
     parser.add_argument("--fps", type=int, default=1)
@@ -113,6 +113,7 @@ def main():
                    background_image,
                    background_pix_distrib,
                    has_made_up)
+
     if args.outdir:
         plt.savefig(os.path.join(args.outdir, 'non_background_fig.png'))
 
@@ -243,7 +244,7 @@ def prev_vs_made_up_viz(prev_image: np.ndarray,
         ax.set_yticks([])
         ax.axis("off")
     axes[0].set_title("previous image image")
-    axes[0].imshow(prev_image, vmin=0, vmax=1)
+    axes[0].imshow(np.clip(prev_image, 0, 1), vmin=0, vmax=1)
     axes[1].set_title("made-up masked image")
     axes[1].imshow(made_up_masked_image, vmin=0, vmax=1)
     axes[2].set_title("combined")
@@ -279,7 +280,7 @@ def combination_viz(background_masked_image: np.ndarray,
     axes[1, 0].imshow(background_pix_distrib, vmin=0, vmax=1)
 
     axes[0, 1].set_title("previous\nimage")
-    axes[0, 1].imshow(prev_image, vmin=0, vmax=1)
+    axes[0, 1].imshow(np.clip(prev_image, 0, 1), vmin=0, vmax=1)
     axes[1, 1].set_title("previous pix\ndistrib")
     axes[1, 1].imshow(prev_pix_distrib, vmin=0, vmax=1)
 
@@ -370,13 +371,12 @@ def cdna_image_viz(kernels: np.ndarray,
     for i in range(n_kernels):
         kernel = kernels[i]
         axes[0, i].set_title("kernel #{}".format(i))
-        # Don't set vmin/vmax here, we let matplotlib normalize these here since they only show relative "motion"
         axes[0, i].imshow(kernel, cmap='Blues', vmin=0, vmax=1)
     transformed_image_handles = []
     step_text_handles = []
     for i in range(n_kernels):
         axes[1, i].set_title("transformed #{}".format(i))
-        transformed_image_handle = axes[1, i].imshow(prev_image, vmin=0, vmax=1)
+        transformed_image_handle = axes[1, i].imshow(np.clip(prev_image, 0, 1), vmin=0, vmax=1)
         transformed_image_handles.append(transformed_image_handle)
         step_text_handle = axes[1, i].text(5, 8, 't=0', fontdict={'color': 'white', 'size': 5},
                                            bbox=dict(facecolor='black', alpha=0.5))
@@ -387,7 +387,7 @@ def cdna_image_viz(kernels: np.ndarray,
             # the background image is not transformed, so just skip the first image which is the transformed "made-up" image
             step_text_handles[i].set_text("t={}".format(j))
             if j == 0:
-                transformed_image_handles[i].set_data(prev_image)
+                transformed_image_handles[i].set_data(np.clip(prev_image, 0, 1))
             else:
                 transformed_image_handles[i].set_data(np.clip(images_transformed[i + (extra_masks - 1)], 0, 1))
 
@@ -399,7 +399,7 @@ def cdna_image_viz(kernels: np.ndarray,
     for i in range(n_kernels):
         output = masked_images[i + extra_masks]
         axes[3, i].set_title("masked #{}".format(i))
-        axes[3, i].imshow(output, vmin=0, vmax=1)
+        axes[3, i].imshow(np.clip(output, 0, 1), vmin=0, vmax=1)
     return transformed_image_anim
 
 
@@ -424,8 +424,8 @@ def setup_and_run(args, context_length):
     sess.graph.as_default()
     model.restore(sess, args.checkpoint)
 
-    source_pixel = gui_tools.get_source_pixel(context_images[0])
-    # source_pixel = NumpyPoint(19, 26)
+    # source_pixel = gui_tools.get_source_pixel(context_images[0])
+    source_pixel = NumpyPoint(19, 26)
 
     context_pix_distribs = np.zeros((1, context_length, args.s, args.s, 1), dtype=np.float32)
     context_pix_distribs[0, 0, source_pixel.row, source_pixel.col] = 1.0

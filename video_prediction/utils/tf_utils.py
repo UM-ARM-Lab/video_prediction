@@ -262,8 +262,12 @@ def add_summaries(outputs, collections=None):
             scalar_outputs[name] = output
         elif output.shape.ndims == 4:
             image_outputs[name] = output
-        elif output.shape.ndims > 4 and output.shape[4].value in (1, 3):
+        elif output.shape.ndims == 5 and output.shape[4].value in (1, 3):
             gif_outputs[name] = output
+        elif name in ['gen_masks', 'gen_cdna_kernels']:
+            for i, gif_like_output in enumerate(tf.unstack(output, axis=1)):
+                summary_name = '{}_{}'.format(name, i)
+                gif_outputs[summary_name] = gif_like_output
     add_scalar_summaries(scalar_outputs, collections=collections)
     add_image_summaries(image_outputs, collections=collections)
     add_gif_summaries(gif_outputs, collections=collections)
