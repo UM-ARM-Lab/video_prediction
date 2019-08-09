@@ -136,6 +136,10 @@ def main():
         print(k, "=", v)
     print('------------------------------------- End --------------------------------------')
 
+    summary_args = {
+        'fps': 2,
+    }
+
     VideoDataset = datasets.get_dataset_class(args.dataset)
     train_dataset = VideoDataset(
         args.input_dir,
@@ -185,7 +189,7 @@ def main():
     inputs = iterator.get_next()
 
     # inputs comes from the training dataset by default, unless train_handle is remapped to the val_handles
-    model.build_graph(inputs)
+    model.build_graph(inputs, summary_args)
 
     if long_val_dataset is not None:
         # separately build a model for the longer sequence.
@@ -200,7 +204,7 @@ def main():
             hparams=args.model_hparams,
             aggregate_nccl=args.aggregate_nccl)
         tf.get_variable_scope().reuse_variables()
-        long_model.build_graph(long_val_dataset.make_batch(batch_size))
+        long_model.build_graph(long_val_dataset.make_batch(batch_size), summary_args)
     else:
         long_model = None
 
@@ -250,6 +254,8 @@ def main():
                 return freq and ((step + 1) % freq == 0 or (step + 1) in (0, max_steps - start_step))
 
         def should_eval(step, freq):
+            # FIXME
+            return False
             # never run eval summaries at the beginning since it's expensive, unless it's the last iteration
             return should(step, freq) and (step >= 0 or (step + 1) == (max_steps - start_step))
 

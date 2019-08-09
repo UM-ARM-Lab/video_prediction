@@ -466,8 +466,13 @@ class VideoPredictionModel(BaseVideoPredictionModel):
         metrics_tuple = nest.map_structure(transpose_batch_time, metrics_tuple)
         return outputs_tuple, losses_tuple, loss_tuple, metrics_tuple
 
-    def build_graph(self, inputs):
+    def build_graph(self, inputs, summary_args=None):
         BaseVideoPredictionModel.build_graph(self, inputs)
+
+        if summary_args is None:
+            summary_args = {
+                'fps': 4,
+            }
 
         global_step = tf.train.get_or_create_global_step()
         # Capture the variables created from here until the train_op for the
@@ -701,8 +706,8 @@ class VideoPredictionModel(BaseVideoPredictionModel):
         self.accum_eval_metrics_reset_op = tf.group([tf.assign(v, tf.zeros_like(v)) for v in local_variables])
 
         original_summaries = set(tf.get_collection(tf.GraphKeys.SUMMARIES))
-        add_summaries(self.inputs)
-        add_summaries(self.outputs)
+        add_summaries(self.inputs, summary_args=summary_args)
+        add_summaries(self.outputs, summary_args=summary_args)
         add_scalar_summaries(self.d_losses)
         add_scalar_summaries(self.g_losses)
         add_scalar_summaries(self.metrics)
@@ -718,7 +723,7 @@ class VideoPredictionModel(BaseVideoPredictionModel):
         self.image_summary_op = tf.summary.merge(list(summaries & set(tf.get_collection(tf_utils.IMAGE_SUMMARIES))))
 
         original_summaries = set(tf.get_collection(tf.GraphKeys.SUMMARIES))
-        add_gif_summaries(self.eval_outputs)
+        add_gif_summaries(self.eval_outputs, summary_args=summary_args)
         add_plot_and_scalar_summaries(
             {name: tf.reduce_mean(metric, axis=0) for name, metric in self.eval_metrics.items()},
             x_offset=self.hparams.context_frames + 1)
@@ -799,7 +804,7 @@ class VideoPredictionModel(BaseVideoPredictionModel):
                                                       for discrim_feature_fake, discrim_feature_real in
                                                       zip(discrim_features_fake, discrim_features_real)])
                     gen_losses["gen%s_gan_feature_cdist_loss" % infix] = (
-                    gen_gan_feature_cdist_loss, hparams.gan_feature_cdist_weight)
+                        gen_gan_feature_cdist_loss, hparams.gan_feature_cdist_weight)
         vae_gan_weights = {'_image_sn': hparams.image_sn_vae_gan_weight,
                            '_images_sn': hparams.images_sn_vae_gan_weight,
                            '_video_sn': hparams.video_sn_vae_gan_weight}
@@ -824,14 +829,14 @@ class VideoPredictionModel(BaseVideoPredictionModel):
                                                        for discrim_feature_enc_fake, discrim_feature_enc_real in
                                                        zip(discrim_features_enc_fake, discrim_features_enc_real)])
                     gen_losses["gen%s_vae_gan_feature_l2_loss" % infix] = (
-                    gen_vae_gan_feature_l2_loss, hparams.vae_gan_feature_l2_weight)
+                        gen_vae_gan_feature_l2_loss, hparams.vae_gan_feature_l2_weight)
                 if hparams.vae_gan_feature_cdist_weight:
                     gen_vae_gan_feature_cdist_loss = sum(
                         [vp.losses.cosine_distance(discrim_feature_enc_fake, discrim_feature_enc_real)
                          for discrim_feature_enc_fake, discrim_feature_enc_real in
                          zip(discrim_features_enc_fake, discrim_features_enc_real)])
                     gen_losses["gen%s_vae_gan_feature_cdist_loss" % infix] = (
-                    gen_vae_gan_feature_cdist_loss, hparams.vae_gan_feature_cdist_weight)
+                        gen_vae_gan_feature_cdist_loss, hparams.vae_gan_feature_cdist_weight)
         if hparams.kl_weight:
             gen_kl_loss = vp.losses.kl_loss(outputs['zs_mu_enc'], outputs['zs_log_sigma_sq_enc'],
                                             outputs.get('zs_mu_prior'), outputs.get('zs_log_sigma_sq_prior'))

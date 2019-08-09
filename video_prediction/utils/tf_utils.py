@@ -227,7 +227,11 @@ def add_image_summaries(outputs, max_outputs=8, collections=None):
                 tf.summary.image(name, output, collections=collections)
 
 
-def add_gif_summaries(outputs, max_outputs=8, collections=None):
+def add_gif_summaries(outputs, max_outputs=8, collections=None, summary_args=None):
+    if summary_args is not None and 'fps' in summary_args:
+        fps = summary_args['fps']
+    else:
+        fps = 4
     if collections is None:
         collections = [tf.GraphKeys.SUMMARIES, IMAGE_SUMMARIES]
     for name_scope, outputs in _as_name_scope_map(outputs).items():
@@ -239,7 +243,7 @@ def add_gif_summaries(outputs, max_outputs=8, collections=None):
                 if output.shape[-1] not in (1, 3):
                     # these are feature maps, so just skip them
                     continue
-                gif_summary.gif_summary(name, output[None], fps=4, collections=collections)
+                gif_summary.gif_summary(name, output[None], fps=fps, collections=collections)
 
 
 def add_scalar_summaries(losses_or_metrics, collections=None):
@@ -251,7 +255,8 @@ def add_scalar_summaries(losses_or_metrics, collections=None):
                 tf.summary.scalar(name, loss_or_metric, collections=collections)
 
 
-def add_summaries(outputs, collections=None):
+def add_summaries(outputs, collections=None, summary_args=None):
+    # TODO: tag things in the output dict for which should get summaries to simplify this logic
     scalar_outputs = OrderedDict()
     image_outputs = OrderedDict()
     gif_outputs = OrderedDict()
@@ -260,7 +265,8 @@ def add_summaries(outputs, collections=None):
             continue
         if output.shape.ndims == 0:
             scalar_outputs[name] = output
-        elif output.shape.ndims == 4:
+        elif output.shape.ndims == 4 and name not in ['gen_background_images']:
+            print(name)
             image_outputs[name] = output
         elif output.shape.ndims == 5 and output.shape[4].value in (1, 3):
             gif_outputs[name] = output
@@ -270,7 +276,7 @@ def add_summaries(outputs, collections=None):
                 gif_outputs[summary_name] = gif_like_output
     add_scalar_summaries(scalar_outputs, collections=collections)
     add_image_summaries(image_outputs, collections=collections)
-    add_gif_summaries(gif_outputs, collections=collections)
+    add_gif_summaries(gif_outputs, collections=collections, summary_args=summary_args)
 
 
 def plot_buf(y):
