@@ -8,13 +8,12 @@ import os
 import random
 
 import matplotlib.pyplot as plt
-import matplotlib as mpl
 import numpy as np
 import tensorflow as tf
 from matplotlib.animation import FuncAnimation
 
 from video_prediction import load_data
-from video_prediction.model_for_planning import build_model, build_placeholders, build_feed_dict
+from video_prediction.model_for_planning import build_model, build_placeholders, build_feed_dict, rollouts_from_results
 from visual_mpc import gui_tools
 
 
@@ -44,7 +43,10 @@ def main():
 
     context_states, context_images, actions = load_data(args.images, args.states, args.actions)
     source_pixel0 = gui_tools.get_source_pixel(context_images[0])
+    assert source_pixel0 is not None
     source_pixel1, target_pixel = gui_tools.get_pixels(context_images[1])
+    assert source_pixel1 is not None
+    assert target_pixel is not None
 
     actions_length, action_dim = actions.shape
     _, state_dim = context_states.shape
@@ -67,55 +69,36 @@ def main():
     feed_dict = build_feed_dict(placeholders, context_images, context_states, context_pixel_distribs, actions,
                                 sequence_length)
     fetches = {
+        'input_images': model.inputs['images'],
+        'input_states': model.inputs['states'],
+        'input_pix_distribs': model.inputs['pix_distribs'],
+
         'gen_images': model.outputs['gen_images'],
         'gen_states': model.outputs['gen_states'],
         'gen_pix_distribs': model.outputs['gen_pix_distribs'],
-        'pix_distribs': model.inputs['pix_distribs'],
-        'input_images': model.inputs['images'],
-        'input_states': model.inputs['states'],
     }
     results = sess.run(fetches, feed_dict=feed_dict)
 
-    # there is a choice of how to combine context and generate frames, but I'm going to
-    # choose the prettier one which is to show all the context images and leave our the gen_images
-    # which are for the same time steps
-    # EX: take the first two frames from context, then skip the 1st frame of output
-    # since that corresponds to the second context image, and take all the rest of the generated images
-    context_images = results['input_images'][0, :context_length].squeeze()
-    context_pix_distribs = results['pix_distribs'][0, :context_length].squeeze()
-    gen_images = results['gen_images'][0, context_length - 1:].squeeze()
-    gen_pix_distribs = results['gen_pix_distribs'][0, context_length - 1:].squeeze()
+    pix_distrib_sequence, image_sequence = rollouts_from_results(results, context_length)
 
-    full_image_sequence = np.concatenate((context_images, gen_images))
-    full_pix_distrib_sequence = np.concatenate((context_pix_distribs, gen_pix_distribs))
-
-    time_data = np.arange(full_pix_distrib_sequence.shape[0])
-    probability_of_designated_pixel = np.zeros(full_pix_distrib_sequence.shape[0])
-    for t, pix_distrib in enumerate(full_pix_distrib_sequence):
+    time_data = np.arange(pix_distrib_sequence.shape[0])
+    probability_of_designated_pixel = np.zeros(pix_distrib_sequence.shape[0])
+    for t, pix_distrib in enumerate(pix_distrib_sequence):
         probability_of_designated_pixel[t] = pix_distrib[source_pixel1.row, source_pixel1.col]
 
     ##########
     # Plotting
     ##########
-    # Configure matplotlib
-    mpl.rcParams['figure.subplot.wspace'] = 0.1
-    mpl.rcParams['figure.subplot.hspace'] = 0.1
-    mpl.rcParams['figure.titlesize'] = 7
-    mpl.rcParams['figure.figsize'] = (9.3, 7)
-    mpl.rcParams['figure.dpi'] = 100
-    mpl.rcParams['axes.formatter.useoffset'] = False
-    mpl.rcParams['figure.facecolor'] = 'white'
-    mpl.rcParams['figure.titlesize'] = 7
-    mpl.rcParams['legend.facecolor'] = 'white'
-    mpl.rcParams['font.size'] = 7
+    gui_tools.configure_matplotlib()
+
     fig, axes = plt.subplots(nrows=1, ncols=3)
 
     axes[0].set_title("prediction [image]")
-    image_handle = axes[0].imshow(full_image_sequence[0], cmap='rainbow')
+    image_handle = axes[0].imshow(image_sequence[0], cmap='rainbow')
 
     axes[1].set_title("prediction [pix distrib]")
     axes[1].scatter(target_pixel.col, target_pixel.row, marker='D', c='y', s=3, alpha=0.5)
-    pix_distrib_handle = axes[1].imshow(full_pix_distrib_sequence[0], cmap='rainbow')
+    pix_distrib_handle = axes[1].imshow(pix_distrib_sequence[0], cmap='rainbow')
     axes[2].set_title("P(selected pixel)")
     axes[2].set_xlabel("time (step #)")
     axes[2].set_ylabel("probability of designated pixel")
@@ -133,8 +116,9 @@ def main():
     axes[1].axis("off")
 
     def update(t):
-        pix_distrib_handle.set_data(full_pix_distrib_sequence[t])
-        image_handle.set_data(np.clip(full_image_sequence[t], 0, 1))
+        pix_distrib_handle.set_data(pix_distrib_sequence[t])
+        # TODO: clip or normalize?
+        image_handle.set_data(np.clip(image_sequence[t], 0, 1))
 
         current_probability_scatter_handle.set_offsets([time_data[t], probability_of_designated_pixel[t]])
 

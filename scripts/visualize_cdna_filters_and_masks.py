@@ -88,17 +88,7 @@ def main():
 
     n_kernels = kernels.shape[0]
 
-    # Configure matplotlib
-    mpl.rcParams['figure.subplot.wspace'] = 0.1
-    mpl.rcParams['figure.subplot.hspace'] = 0.1
-    mpl.rcParams['figure.titlesize'] = 7
-    mpl.rcParams['figure.figsize'] = (9.3, 7)
-    mpl.rcParams['figure.dpi'] = 100
-    mpl.rcParams['axes.formatter.useoffset'] = False
-    mpl.rcParams['figure.facecolor'] = 'white'
-    mpl.rcParams['figure.titlesize'] = 7
-    mpl.rcParams['legend.facecolor'] = 'white'
-    mpl.rcParams['font.size'] = 7
+    gui_tools.configure_matplotlib()
 
     ############################################
     # Background and Made-Up Image Visualization
@@ -244,6 +234,7 @@ def prev_vs_made_up_viz(prev_image: np.ndarray,
         ax.set_yticks([])
         ax.axis("off")
     axes[0].set_title("previous image image")
+    # TODO: clip or normalize?
     axes[0].imshow(np.clip(prev_image, 0, 1), vmin=0, vmax=1)
     axes[1].set_title("made-up masked image")
     axes[1].imshow(made_up_masked_image, vmin=0, vmax=1)
@@ -399,6 +390,7 @@ def cdna_image_viz(kernels: np.ndarray,
     for i in range(n_kernels):
         output = masked_images[i + extra_masks]
         axes[3, i].set_title("masked #{}".format(i))
+        # TODO: clip or normalize?
         axes[3, i].imshow(np.clip(output, 0, 1), vmin=0, vmax=1)
     return transformed_image_anim
 

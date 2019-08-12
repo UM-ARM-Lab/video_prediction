@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import errno
 import json
 import os
-from collections import OrderedDict
 from typing import List
 
 import numpy as np
@@ -39,28 +38,27 @@ class ModelForPlanning:
 
         self.model.restore(self.sess, checkpoint)
 
-    def rollout_all(self, context_images, context_pixel_images, context_states, actions):
+    def rollout(self, context_images, context_pix_distribs, context_states, actions):
         feed_dict = build_feed_dict(self.placeholders,
                                     context_images,
                                     context_states,
-                                    context_pixel_images,
+                                    context_pix_distribs,
                                     actions,
                                     self.sequence_length)
 
-        fetches = OrderedDict({
+        fetches = {
+            'input_images': self.model.inputs['images'],
+            'input_pix_distribs': self.model.inputs['pix_distribs'],
+
             'gen_images': self.model.outputs['gen_images'],
             'gen_pix_distribs': self.model.outputs['gen_pix_distribs'],
-            'gen_states': self.model.outputs['gen_states'],
-        })
+        }
 
         results = self.sess.run(fetches, feed_dict=feed_dict)
 
-        # 0 indexes the batch, which is always of size 1
-        # time indexing here means that we include the last context image only
-        gen_states = np.concatenate((context_states[[1]], results['gen_states'][0, self.context_length:]))
-        gen_pix_distribs = np.concatenate((context_pixel_images[[1]], results['gen_pix_distribs'][0, self.context_length:]))
-        gen_images = np.concatenate((context_images[[1]], results['gen_images'][0, self.context_length:]))
-        return gen_pix_distribs, gen_images, gen_states
+        pix_distribs_sequence, images_sequence = rollouts_from_results(results, self.context_length)
+
+        return pix_distribs_sequence, images_sequence
 
 
 def build_placeholders(context_length, actions_length, h, w, d, state_dim, action_dim):
@@ -136,3 +134,19 @@ def build_model(checkpoint, model_str, model_hparams, input_placeholders, contex
     with tf.variable_scope(''):
         model.build_graph(input_placeholders)
     return model
+
+
+def rollouts_from_results(results, context_length):
+    # there is a choice of how to combine context and generate frames, but I'm going to
+    # choose the prettier one which is to show all the context images and leave our the gen_images
+    # which are for the same time steps
+    # EX: take the first two frames from context, then skip the 1st frame of output
+    # since that corresponds to the second context image, and take all the rest of the generated images
+    context_images = results['input_images'][0, :context_length].squeeze()
+    context_pix_distribs = results['input_pix_distribs'][0, :context_length].squeeze()
+    gen_images = results['gen_images'][0, context_length - 1:].squeeze()
+    gen_pix_distribs = results['gen_pix_distribs'][0, context_length - 1:].squeeze()
+
+    image_sequence = np.concatenate((context_images, gen_images))
+    pix_distrib_sequence = np.concatenate((context_pix_distribs, gen_pix_distribs))
+    return pix_distrib_sequence, image_sequence
