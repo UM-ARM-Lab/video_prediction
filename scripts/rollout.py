@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--model", type=str, help="model class name", default='sna')
     parser.add_argument("--model-hparams", type=str, help="a string of comma separated list of model hyperparameters")
     parser.add_argument("--fps", type=int, default=2)
+    parser.add_argument("--track-target-pixel", action='store_true')
     parser.add_argument("--seed", type=int, default=0)
 
     args = parser.parse_args()
@@ -47,9 +48,14 @@ def main():
 
     source_pixel0 = gui_tools.get_source_pixel(context_images[0])
     assert source_pixel0 is not None
-    source_pixel1, target_pixel = gui_tools.get_pixels(context_images[1])
-    assert source_pixel1 is not None
-    assert target_pixel is not None
+    if args.track_target_pixel:
+        source_pixel1, target_pixel = gui_tools.get_pixels(context_images[1])
+        assert source_pixel1 is not None
+        assert target_pixel is not None
+    else:
+        source_pixel1 = gui_tools.get_source_pixel(context_images[1])
+        assert source_pixel1 is not None
+        target_pixel = None
 
     actions_length, action_dim = actions.shape
     _, state_dim = context_states.shape
@@ -94,14 +100,18 @@ def main():
     ##########
     gui_tools.configure_matplotlib()
 
-    fig, axes = plt.subplots(nrows=1, ncols=3)
+    if args.track_target_pixel:
+        fig, axes = plt.subplots(nrows=1, ncols=3)
+    else:
+        fig, axes = plt.subplots(nrows=1, ncols=2)
 
     axes[0].set_title("prediction [image]")
     image_handle = axes[0].imshow(image_sequence[0])
 
     axes[1].set_title("prediction [pix distrib]")
-    axes[1].scatter(target_pixel.col, target_pixel.row, marker='D', c='y', s=3, alpha=0.5)
     pix_distrib_handle = axes[1].imshow(pix_distrib_sequence[0], cmap='rainbow')
+    if args.track_target_pixel:
+        axes[1].scatter(target_pixel.col, target_pixel.row, marker='D', c='y', s=3, alpha=0.5)
 
     cc, rr = np.meshgrid(np.arange(h), np.arange(w))
     pixel_positions = np.tile(np.stack((rr, cc), axis=2), [pix_distrib_sequence.shape[0], 1, 1, 1])
@@ -109,14 +119,15 @@ def main():
     expected_positions = np.sum(np.sum(weighted_positions, axis=2), axis=1)
     expected_pos_pix_distrib_handle = axes[1].scatter(expected_positions[0, 1], expected_positions[0, 0], c='orange', marker='*',
                                                       s=1)
-    axes[2].set_title("P(selected pixel)")
-    axes[2].set_xlabel("time (step #)")
-    axes[2].set_ylabel("probability of designated pixel")
-    axes[2].plot(time_data, probability_of_designated_pixel)
-    axes[2].set_xlim(0, sequence_length - 1)
-    axes[2].set_ylim(0, 1)
-    axes[2].set_aspect(sequence_length - 1)
-    current_probability_scatter_handle = axes[2].scatter(0, 1, s=20, c='r')
+    if args.track_target_pixel:
+        axes[2].set_title("P(selected pixel)")
+        axes[2].set_xlabel("time (step #)")
+        axes[2].set_ylabel("probability of designated pixel")
+        axes[2].plot(time_data, probability_of_designated_pixel)
+        axes[2].set_xlim(0, sequence_length - 1)
+        axes[2].set_ylim(0, 1)
+        axes[2].set_aspect(sequence_length - 1)
+        current_probability_scatter_handle = axes[2].scatter(0, 1, s=20, c='r')
 
     axes[0].set_xticks([])
     axes[0].set_yticks([])
@@ -129,10 +140,10 @@ def main():
         pix_distrib_handle.set_data(pix_distrib_sequence[t])
         # TODO: clip or normalize?
         image_handle.set_data(np.clip(image_sequence[t], 0, 1))
-
-        current_probability_scatter_handle.set_offsets([time_data[t], probability_of_designated_pixel[t]])
         expected_position = np.flip(expected_positions[t])
         expected_pos_pix_distrib_handle.set_offsets(expected_position)
+        if args.track_target_pixel:
+            current_probability_scatter_handle.set_offsets([time_data[t], probability_of_designated_pixel[t]])
 
     t = 0
 
