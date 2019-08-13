@@ -26,6 +26,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("images", nargs=context_length, help='filename')
     parser.add_argument("states", help='filename')
+    parser.add_argument("context_actions", help='filename')
     parser.add_argument("actions", help='filename')
     parser.add_argument("checkpoint", help="directory with checkpoint or checkpoint name (e.g. checkpoint_dir/model-200000)")
     parser.add_argument("--outdir", help="ignored if output_gif_dir is specified")
@@ -41,7 +42,8 @@ def main():
         np.random.seed(args.seed)
         random.seed(args.seed)
 
-    context_states, context_images, actions = load_data(args.images, args.states, args.actions)
+    context_states, context_images, context_actions, actions = load_data(args.images, args.states, args.context_actions,
+                                                                         args.actions)
 
     source_pixel0 = gui_tools.get_source_pixel(context_images[0])
     assert source_pixel0 is not None
@@ -67,7 +69,6 @@ def main():
 
     model.restore(sess, args.checkpoint)
 
-    context_actions = np.zeros([context_length - 1, action_dim])
     feed_dict = build_feed_dict(placeholders, context_images, context_states, context_pixel_distribs, context_actions, actions,
                                 sequence_length)
     fetches = {
@@ -96,11 +97,18 @@ def main():
     fig, axes = plt.subplots(nrows=1, ncols=3)
 
     axes[0].set_title("prediction [image]")
-    image_handle = axes[0].imshow(image_sequence[0], cmap='rainbow')
+    image_handle = axes[0].imshow(image_sequence[0])
 
     axes[1].set_title("prediction [pix distrib]")
     axes[1].scatter(target_pixel.col, target_pixel.row, marker='D', c='y', s=3, alpha=0.5)
     pix_distrib_handle = axes[1].imshow(pix_distrib_sequence[0], cmap='rainbow')
+
+    cc, rr = np.meshgrid(np.arange(h), np.arange(w))
+    pixel_positions = np.tile(np.stack((rr, cc), axis=2), [pix_distrib_sequence.shape[0], 1, 1, 1])
+    weighted_positions = np.expand_dims(pix_distrib_sequence, axis=3) * pixel_positions
+    expected_positions = np.sum(np.sum(weighted_positions, axis=2), axis=1)
+    expected_pos_pix_distrib_handle = axes[1].scatter(expected_positions[0, 1], expected_positions[0, 0], c='orange', marker='*',
+                                                      s=1)
     axes[2].set_title("P(selected pixel)")
     axes[2].set_xlabel("time (step #)")
     axes[2].set_ylabel("probability of designated pixel")
@@ -123,6 +131,8 @@ def main():
         image_handle.set_data(np.clip(image_sequence[t], 0, 1))
 
         current_probability_scatter_handle.set_offsets([time_data[t], probability_of_designated_pixel[t]])
+        expected_position = np.flip(expected_positions[t])
+        expected_pos_pix_distrib_handle.set_offsets(expected_position)
 
     t = 0
 

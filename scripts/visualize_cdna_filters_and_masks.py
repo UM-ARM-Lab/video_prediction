@@ -24,6 +24,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("images", nargs=context_length, help='filename')
     parser.add_argument("states", help='filename')
+    parser.add_argument("context_actions", help='filename')
     parser.add_argument("actions", help='filename')
     parser.add_argument("checkpoint", help="directory with checkpoint or checkpoint name (e.g. checkpoint_dir/model-200000)")
     parser.add_argument("--outdir", help="ignored if output_gif_dir is specified")
@@ -168,7 +169,7 @@ def main():
 
 def imshow_madeup_if_has(ax, image, has_made_up, **kwargs):
     if has_made_up:
-        ax.imshow(image, vmin=0, vmax=1, **kwargs)
+        ax.imshow(image, **kwargs)
     else:
         ax.plot([0, 64], [0, 64], c='r')
         ax.plot([0, 0, 64, 64, 0], [0, 64, 64, 0, 0], c='gray')
@@ -204,11 +205,11 @@ def non_motion_viz(background_masked_image: np.ndarray,
     axes[0, 2].imshow(background_masked_image, vmin=0, vmax=1)
 
     axes[1, 0].set_title("made-up image")
-    imshow_madeup_if_has(axes[1, 0], made_up_image, has_made_up)
+    imshow_madeup_if_has(axes[1, 0], made_up_image, has_made_up, vmin=0, vmax=1)
     axes[1, 1].set_title("made-up mask")
-    imshow_madeup_if_has(axes[1, 1], masks[1], has_made_up, cmap='gray')
+    imshow_madeup_if_has(axes[1, 1], masks[1], has_made_up, vmin=0, vmax=1, cmap='gray')
     axes[1, 2].set_title("masked made up image")
-    imshow_madeup_if_has(axes[1, 2], made_up_masked_image, has_made_up)
+    imshow_madeup_if_has(axes[1, 2], made_up_masked_image, has_made_up, vmin=0, vmax=1)
 
     axes[2, 0].set_title("background pix distrib")
     axes[2, 0].imshow(background_pix_distrib, vmin=0, vmax=1)
@@ -218,11 +219,11 @@ def non_motion_viz(background_masked_image: np.ndarray,
     axes[2, 2].imshow(background_pix_distrib_masked, vmin=0, vmax=1)
 
     axes[3, 0].set_title("made-up pix_distrib")
-    imshow_madeup_if_has(axes[3, 0], made_up_pix_distrib, has_made_up)
+    imshow_madeup_if_has(axes[3, 0], made_up_pix_distrib, has_made_up, vmin=0, vmax=1)
     axes[3, 1].set_title("made-up mask")
-    imshow_madeup_if_has(axes[3, 1], masks[1], has_made_up, cmap='gray')
+    imshow_madeup_if_has(axes[3, 1], masks[1], has_made_up, vmin=0, vmax=1, cmap='gray')
     axes[3, 2].set_title("masked made up pix distrib")
-    imshow_madeup_if_has(axes[3, 2], made_up_pix_distrib_masked, has_made_up)
+    imshow_madeup_if_has(axes[3, 2], made_up_pix_distrib_masked, has_made_up, vmin=0, vmax=1)
 
 
 def prev_vs_made_up_viz(prev_image: np.ndarray,
@@ -259,7 +260,7 @@ def combination_viz(background_masked_image: np.ndarray,
                     has_made_up: bool,
                     extra_masks: int,
                     ):
-    fig, axes = plt.subplots(nrows=2, ncols=n_kernels + 5, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
+    fig, axes = plt.subplots(nrows=3, ncols=n_kernels + 5, gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
     for ax in axes.flatten():
         ax.set_xticks([])
         ax.set_yticks([])
@@ -269,32 +270,44 @@ def combination_viz(background_masked_image: np.ndarray,
     axes[0, 0].imshow(background_image, vmin=0, vmax=1)
     axes[1, 0].set_title("background pix\ndistrib")
     axes[1, 0].imshow(background_pix_distrib, vmin=0, vmax=1)
+    axes[2, 0].set_title("background pix\ndistrib scaled")
+    axes[2, 0].imshow(background_pix_distrib, cmap='RdYlBu_r')
 
     axes[0, 1].set_title("previous\nimage")
     axes[0, 1].imshow(np.clip(prev_image, 0, 1), vmin=0, vmax=1)
     axes[1, 1].set_title("previous pix\ndistrib")
     axes[1, 1].imshow(prev_pix_distrib, vmin=0, vmax=1)
+    axes[2, 1].set_title("previous pix\ndistrib scaled")
+    axes[2, 1].imshow(prev_pix_distrib, cmap='RdYlBu_r')
 
     for i in range(n_kernels):
         axes[0, i + 2].set_title("masked #{}".format(i))
         axes[0, i + 2].imshow(np.clip(masked_images[i + extra_masks], 0, 1), vmin=0, vmax=1)
         axes[1, i + 2].set_title("masked #{}".format(i))
         axes[1, i + 2].imshow(np.clip(pix_distribs_masked[i + extra_masks], 0, 1), vmin=0, vmax=1)
+        axes[2, i + 2].set_title("masked #{}\nscaled".format(i))
+        axes[2, i + 2].imshow(np.clip(pix_distribs_masked[i + extra_masks], 0, 1), cmap='RdYlBu_r')
 
     axes[0, -3].set_title('background\nmasked')
     axes[0, -3].imshow(background_masked_image, vmin=0, vmax=1)
     axes[1, -3].set_title('background\nmasked')
     axes[1, -3].imshow(background_pix_distrib_masked, vmin=0, vmax=1)
+    axes[2, -3].set_title('background\nmasked scaled')
+    axes[2, -3].imshow(background_pix_distrib_masked, cmap='RdYlBu_r')
 
     axes[0, -2].set_title('made-up\nmasked')
-    imshow_madeup_if_has(axes[0, -2], masked_images[1], has_made_up)
+    imshow_madeup_if_has(axes[0, -2], masked_images[1], has_made_up, vmin=0, vmax=1)
     axes[1, -2].set_title('made-up\nmasked')
-    imshow_madeup_if_has(axes[1, -2], made_up_pix_distrib_masked, has_made_up)
+    imshow_madeup_if_has(axes[1, -2], made_up_pix_distrib_masked, has_made_up, vmin=0, vmax=1)
+    axes[2, -2].set_title('made-up\nmasked scaled')
+    imshow_madeup_if_has(axes[2, -2], made_up_pix_distrib_masked, has_made_up, cmap='rainbow')
 
     axes[0, -1].set_title("combined image")
     axes[0, -1].imshow(np.clip(gen_images, 0, 1), vmin=0, vmax=1)
     axes[1, -1].set_title("combined pix\ndistrib")
     axes[1, -1].imshow(np.clip(gen_pix_distribs, 0, 1), vmin=0, vmax=1)
+    axes[2, -1].set_title("combined pix\ndistrib scaled")
+    axes[2, -1].imshow(np.clip(gen_pix_distribs, 0, 1), cmap='RdYlBu_r')
 
 
 def cdna_pix_distrib_viz(kernels: np.ndarray,
@@ -396,7 +409,8 @@ def cdna_image_viz(kernels: np.ndarray,
 
 
 def setup_and_run(args, context_length):
-    context_states, context_images, actions = load_data(args.images, args.states, args.actions)
+    context_states, context_images, context_actions, actions = load_data(args.images, args.states, args.context_actions,
+                                                                         args.actions)
 
     actions_length, action_dim = actions.shape
     _, h, w, d = context_images.shape
@@ -412,13 +426,13 @@ def setup_and_run(args, context_length):
     sess.graph.as_default()
     model.restore(sess, args.checkpoint)
 
-    source_pixel = gui_tools.get_source_pixel(context_images[0])
+    source_pixel0 = gui_tools.get_source_pixel(context_images[0])
+    source_pixel1 = gui_tools.get_source_pixel(context_images[1])
     # source_pixel = NumpyPoint(19, 26)
 
     context_pix_distribs = np.zeros((context_length, args.s, args.s, 1), dtype=np.float32)
-    context_pix_distribs[0, source_pixel.row, source_pixel.col] = 1.0
-    context_pix_distribs[1, source_pixel.row, source_pixel.col] = 1.0
-    context_actions = np.zeros([context_length - 1, action_dim])
+    context_pix_distribs[0, source_pixel0.row, source_pixel0.col] = 1.0
+    context_pix_distribs[1, source_pixel1.row, source_pixel1.col] = 1.0
 
     feed_dict = build_feed_dict(placeholders=placeholders,
                                 context_images=context_images,

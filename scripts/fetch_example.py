@@ -109,7 +109,7 @@ def main():
         plt.imsave(os.path.join(args.outdir, '0.png'), first_context_image)
         plt.imsave(os.path.join(args.outdir, '1.png'), second_context_image)
         np.savetxt(os.path.join(args.outdir, 'states.csv'), context_states, delimiter=',')
-        np.savetxt(os.path.join(args.outdir, 'actions.csv'), actions, delimiter=',')
+        np.savetxt(os.path.join(args.outdir, 'context_actions.csv'), actions, delimiter=',')
 
 
 if __name__ == '__main__':

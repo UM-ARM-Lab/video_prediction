@@ -6,8 +6,9 @@ from . import metrics
 from . import ops
 
 
-def load_data(context_image_filenames, context_states_filename, actions_filename):
+def load_data(context_image_filenames, context_states_filename, context_actions_filename, actions_filename):
     actions = np.atleast_2d(np.genfromtxt(actions_filename, delimiter=',', dtype=np.float32))
+    context_actions = np.atleast_2d(np.genfromtxt(context_actions_filename, delimiter=',', dtype=np.float32))
     context_states = np.genfromtxt(context_states_filename, delimiter=',', dtype=np.float32)
     context_images = []
     for time_step_idx, context_image_filename in enumerate(context_image_filenames):
@@ -17,5 +18,5 @@ def load_data(context_image_filenames, context_states_filename, actions_filename
         context_images.append(rgb_image_float)
     context_images = np.array(context_images)
 
-    return context_states, context_images, actions
+    return context_states, context_images, context_actions, actions
 

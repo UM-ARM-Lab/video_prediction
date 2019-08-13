@@ -49,11 +49,14 @@ def main():
                 outputs = sess.run(inputs)
             except tf.errors.OutOfRangeError:
                 break
+            except KeyboardInterrupt:
+                print("Keyboard Interrupt. Saving and stopping!")
+                break
 
             images = outputs['images']
             images = np.clip((images * 255), 0, 255).astype(np.uint8)
 
-            done = write_images(args, frame_idx, images, writer)
+            done, frame_idx = write_images(args, frame_idx, images, writer)
             if done:
                 print("Stopping early!")
                 break
@@ -66,10 +69,10 @@ def write_images(args, frame_idx, images, writer):
     for traj in images:
         for image in traj:
             if 0 < args.first_n <= frame_idx:
-                return True
+                return True, frame_idx
             writer.append_data(image)
             frame_idx += 1
-    return False
+    return False, frame_idx
 
 
 if __name__ == '__main__':
