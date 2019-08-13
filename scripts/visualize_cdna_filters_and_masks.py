@@ -418,8 +418,15 @@ def setup_and_run(args, context_length):
     context_pix_distribs = np.zeros((context_length, args.s, args.s, 1), dtype=np.float32)
     context_pix_distribs[0, source_pixel.row, source_pixel.col] = 1.0
     context_pix_distribs[1, source_pixel.row, source_pixel.col] = 1.0
+    context_actions = np.zeros([context_length - 1, action_dim])
 
-    feed_dict = build_feed_dict(placeholders, context_images, context_states, context_pix_distribs, actions, sequence_length)
+    feed_dict = build_feed_dict(placeholders=placeholders,
+                                context_images=context_images,
+                                context_states=context_states,
+                                context_pix_distribs=context_pix_distribs,
+                                context_actions=context_actions,
+                                actions=actions,
+                                sequence_length=sequence_length)
 
     fetches = {
         'input_images': model.inputs['images'],

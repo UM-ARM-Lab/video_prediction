@@ -42,6 +42,7 @@ def main():
         random.seed(args.seed)
 
     context_states, context_images, actions = load_data(args.images, args.states, args.actions)
+
     source_pixel0 = gui_tools.get_source_pixel(context_images[0])
     assert source_pixel0 is not None
     source_pixel1, target_pixel = gui_tools.get_pixels(context_images[1])
@@ -53,9 +54,9 @@ def main():
     _, h, w, d = context_images.shape
     placeholders, sequence_length = build_placeholders(context_length, actions_length, h, w, d, state_dim, action_dim)
 
-    context_pixel_distribs = np.zeros((1, context_length, h, w, 1), dtype=np.float32)
-    context_pixel_distribs[0, 0, source_pixel0.row, source_pixel0.col] = 1.0
-    context_pixel_distribs[0, 1, source_pixel1.row, source_pixel1.col] = 1.0
+    context_pixel_distribs = np.zeros((context_length, h, w, 1), dtype=np.float32)
+    context_pixel_distribs[0, source_pixel0.row, source_pixel0.col] = 1.0
+    context_pixel_distribs[1, source_pixel1.row, source_pixel1.col] = 1.0
 
     model = build_model(args.checkpoint, args.model, args.model_hparams, placeholders, context_length, sequence_length)
 
@@ -66,7 +67,8 @@ def main():
 
     model.restore(sess, args.checkpoint)
 
-    feed_dict = build_feed_dict(placeholders, context_images, context_states, context_pixel_distribs, actions,
+    context_actions = np.zeros([context_length - 1, action_dim])
+    feed_dict = build_feed_dict(placeholders, context_images, context_states, context_pixel_distribs, context_actions, actions,
                                 sequence_length)
     fetches = {
         'input_images': model.inputs['images'],
