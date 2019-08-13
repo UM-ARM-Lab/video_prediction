@@ -38,11 +38,12 @@ class ModelForPlanning:
 
         self.model.restore(self.sess, checkpoint)
 
-    def rollout(self, context_images, context_pix_distribs, context_states, actions):
+    def rollout(self, context_images, context_states, context_pix_distribs, context_actions, actions):
         feed_dict = build_feed_dict(self.placeholders,
                                     context_images,
                                     context_states,
                                     context_pix_distribs,
+                                    context_actions,
                                     actions,
                                     self.sequence_length)
 
@@ -74,22 +75,28 @@ def build_placeholders(context_length, actions_length, h, w, d, state_dim, actio
         'states': tf.placeholder(tf.float32, [1, sequence_length, state_dim]),
         'images': tf.placeholder(tf.float32, [1, sequence_length, h, w, d]),
         'pix_distribs': tf.placeholder(tf.float32, [1, context_length, h, w, 1]),
-        'actions': tf.placeholder(tf.float32, [1, actions_length, action_dim]),
+        'actions': tf.placeholder(tf.float32, [1, actions_length + (context_length - 1), action_dim]),
     }
 
     return placeholders, sequence_length
 
 
-def build_feed_dict(placeholders, context_images, context_states, context_pix_distribs, actions, sequence_length):
+def build_feed_dict(placeholders,
+                    context_images,
+                    context_states,
+                    context_pix_distribs,
+                    context_actions,
+                    actions,
+                    sequence_length):
+    assert context_pix_distribs.ndim == 4
     _, action_dim = actions.shape
-    _, state_dim = context_states.shape
+    context_length, state_dim = context_states.shape
     _, h, w, d = context_images.shape
     # FIXME: this is gross
-    context_length = context_pix_distribs.shape[1]
     padded_context_states = np.zeros([1, sequence_length, state_dim], dtype=np.float32)
     padded_context_images = np.zeros([1, sequence_length, h, w, d], dtype=np.float32)
-    batched_context_pix_distribs = context_pix_distribs
-    batched_actions = np.expand_dims(actions, axis=0)
+    batched_context_pix_distribs = context_pix_distribs.reshape(1, context_length, h, w, 1)
+    batched_actions = np.expand_dims(np.concatenate((context_actions, actions)), axis=0)
 
     padded_context_images[0, :context_length] = context_images
     padded_context_states[0, :context_length] = context_states

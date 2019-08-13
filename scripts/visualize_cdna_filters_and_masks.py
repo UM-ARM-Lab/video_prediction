@@ -412,12 +412,12 @@ def setup_and_run(args, context_length):
     sess.graph.as_default()
     model.restore(sess, args.checkpoint)
 
-    # source_pixel = gui_tools.get_source_pixel(context_images[0])
-    source_pixel = NumpyPoint(19, 26)
+    source_pixel = gui_tools.get_source_pixel(context_images[0])
+    # source_pixel = NumpyPoint(19, 26)
 
-    context_pix_distribs = np.zeros((1, context_length, args.s, args.s, 1), dtype=np.float32)
-    context_pix_distribs[0, 0, source_pixel.row, source_pixel.col] = 1.0
-    context_pix_distribs[0, 1, source_pixel.row, source_pixel.col] = 1.0
+    context_pix_distribs = np.zeros((context_length, args.s, args.s, 1), dtype=np.float32)
+    context_pix_distribs[0, source_pixel.row, source_pixel.col] = 1.0
+    context_pix_distribs[1, source_pixel.row, source_pixel.col] = 1.0
 
     feed_dict = build_feed_dict(placeholders, context_images, context_states, context_pix_distribs, actions, sequence_length)
 
