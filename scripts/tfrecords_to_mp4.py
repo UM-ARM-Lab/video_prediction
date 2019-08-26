@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import argparse
 import json
-import os
 
 import imageio
 import numpy as np
@@ -16,6 +15,7 @@ def main():
     parser.add_argument('dataset')
     parser.add_argument('dataset_hparams_dict')
     parser.add_argument('outfile')
+    parser.add_argument('--dataset-hparams')
     parser.add_argument('--mode', choices=['train', 'test', 'val'], default='train')
     parser.add_argument('--fps', type=int, default=2)
     parser.add_argument('--first-n', type=int, default=-1)
@@ -36,7 +36,8 @@ def main():
     VideoDataset = datasets.get_dataset_class(args.dataset)
     with open(args.dataset_hparams_dict, 'r') as hparams_f:
         hparams_dict = json.loads(hparams_f.read())
-    dataset = VideoDataset(args.input_dir, mode=args.mode, seed=0, num_epochs=1, hparams_dict=hparams_dict)
+    dataset = VideoDataset(args.input_dir, mode=args.mode, seed=0, num_epochs=1, hparams_dict=hparams_dict,
+                           hparams=args.dataset_hparams)
 
     inputs = dataset.make_batch(16, shuffle=False)
     batch_idx = 0

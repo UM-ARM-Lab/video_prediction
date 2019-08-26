@@ -108,7 +108,7 @@ class BaseVideoDataset(object):
             shuffle_on_val=False,
             use_state=False,
             free_space_only=False,
-            compression_type=None,
+            compression_type='',
         )
         return hparams
 
