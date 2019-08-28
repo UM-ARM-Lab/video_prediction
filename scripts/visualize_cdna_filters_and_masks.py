@@ -31,7 +31,7 @@ def main():
     parser.add_argument("--model", type=str, help="model class name", default='sna')
     parser.add_argument("--model_hparams", type=str, help="a string of comma separated list of model hyperparameters")
     parser.add_argument("--fps", type=int, default=1)
-    parser.add_argument("--show-combined-masks", type=str, default='', help='comma seperated list of integers from 1-10')
+    parser.add_argument("--show-combined-masks", type=str, default='', help='comma seperated list of integers from 0-9')
     parser.add_argument("-t", type=int, default=0)
     parser.add_argument("-s", type=int, default=64)
     parser.add_argument("--seed", type=int, default=0)
@@ -419,8 +419,9 @@ def cdna_image_viz(kernels: np.ndarray,
 def show_combined_masks(prev_image: np.ndarray,
                         masks: np.ndarray,
                         indeces: List[int]):
-    fig, axes = plt.subplots(nrows=2, ncols=masks.shape[0], gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
-    for ax in axes.flatten():
+    fig, axes = plt.subplots(nrows=3, ncols=int(masks.shape[0] / 2), gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
+    axes = axes.flatten()
+    for ax in axes:
         ax.set_xticks([])
         ax.set_yticks([])
         ax.axis("off")
@@ -430,33 +431,33 @@ def show_combined_masks(prev_image: np.ndarray,
 
     for i, mask in enumerate(masks[1:]):
         if i in indeces:
-            axes[0, i].plot([0, 0, 63, 63, 0], [0, 63, 63, 0, 0], c='green', linewidth=4)
-        axes[0, i].set_title("mask #{}".format(i))
-        axes[0, i].imshow(mask, cmap='gray', vmin=0, vmax=1)
+            axes[i].plot([0, 0, 63, 63, 0], [0, 63, 63, 0, 0], c='green', linewidth=4)
+        axes[i].set_title("mask #{}".format(i))
+        axes[i].imshow(mask, cmap='gray', vmin=0, vmax=1)
 
-    axes[1, 0].set_title("supposed\nbackground mask")
-    axes[1, 0].imshow(background_mask, cmap='gray', vmin=0, vmax=1)
+    axes[i + 1].set_title("supposed background mask")
+    axes[i + 1].imshow(background_mask, cmap='gray', vmin=0, vmax=1)
 
     indeces = np.array(indeces)
     shifted_indeces = indeces + 1
     masks_to_combine = masks[shifted_indeces]
     combined_masks = np.sum(masks_to_combine, axis=0)
     combined_masks_3d = np.atleast_3d(combined_masks)
-    axes[1, 1].set_title("combined masks\n{}".format(indeces))
-    axes[1, 1].imshow(combined_masks, cmap='gray', vmin=0, vmax=1)
+    axes[i + 2].set_title("combined masks {}".format(indeces))
+    axes[i + 2].imshow(combined_masks, cmap='gray', vmin=0, vmax=1)
 
-    axes[1, 2].imshow(np.clip(combined_masks_3d * prev_image, 0, 1), vmin=0, vmax=1)
-    axes[1, 2].set_title("masks [image]")
+    axes[i + 3].imshow(np.clip(combined_masks_3d * prev_image, 0, 1), vmin=0, vmax=1)
+    axes[i + 3].set_title("masks [image]")
 
     other_indeces = np.setdiff1d(np.arange(1, masks.shape[0]), shifted_indeces)
     other_masks_to_combine = masks[other_indeces]
     combined_other_masks = np.sum(other_masks_to_combine, axis=0)
     combined_other_masks_3d = np.atleast_3d(combined_other_masks)
-    axes[1, 3].set_title("other masks\ncombined")
-    axes[1, 3].imshow(combined_other_masks, cmap='gray', vmin=0, vmax=1)
+    axes[i + 4].set_title("other masks combined")
+    axes[i + 4].imshow(combined_other_masks, cmap='gray', vmin=0, vmax=1)
 
-    axes[1, 4].imshow(np.clip(combined_other_masks_3d * prev_image, 0, 1), vmin=0, vmax=1)
-    axes[1, 4].set_title("other masks [image]")
+    axes[i + 5].imshow(np.clip(combined_other_masks_3d * prev_image, 0, 1), vmin=0, vmax=1)
+    axes[i + 5].set_title("other masks [image]")
 
 
 def setup_and_run(args, context_length):
@@ -477,10 +478,10 @@ def setup_and_run(args, context_length):
     sess.graph.as_default()
     model.restore(sess, args.checkpoint)
 
-    # source_pixel0 = gui_tools.get_source_pixel(context_images[0])
-    # source_pixel1 = gui_tools.get_source_pixel(context_images[1])
-    source_pixel0 = NumpyPoint(46, 16)
-    source_pixel1 = NumpyPoint(46, 16)
+    source_pixel0 = gui_tools.get_source_pixel(context_images[0])
+    source_pixel1 = gui_tools.get_source_pixel(context_images[1])
+    # source_pixel0 = NumpyPoint(46, 16)
+    # source_pixel1 = NumpyPoint(46, 16)
 
     context_pix_distribs = np.zeros((context_length, args.s, args.s, 1), dtype=np.float32)
     context_pix_distribs[0, source_pixel0.row, source_pixel0.col] = 1.0

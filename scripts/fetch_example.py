@@ -2,16 +2,11 @@
 import argparse
 import json
 import os
-import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 from video_prediction.datasets import dataset_utils
-
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=FutureWarning)
-    import tensorflow as tf
 
 
 def main():
@@ -52,9 +47,13 @@ def main():
             break
         runs += 1
 
+    images = outputs['images']
     if args.interactive:
-        first_context_image = outputs['images'][0, 0]
-        second_context_image = outputs['images'][0, 1]
+        if images.ndim == 4:
+            images = np.expand_dims(images, axis=0)
+
+        first_context_image = images[0, 0]
+        second_context_image = images[0, 1]
 
         fig, axes = plt.subplots(nrows=1, ncols=2)
         first_image_handle = axes[0].imshow(first_context_image)
@@ -67,13 +66,13 @@ def main():
         def on_key_release(event):
             nonlocal t
             if event.key == 'right':
-                if t < outputs['images'].shape[1] - 2:
+                if t < images.shape[1] - 2:
                     t += 1
             if event.key == 'left':
                 if t > 0:
                     t -= 1
-            first_context_image = outputs['images'][0, t]
-            second_context_image = outputs['images'][0, t + 1]
+            first_context_image = images[0, t]
+            second_context_image = images[0, t + 1]
             first_image_handle.set_data(first_context_image)
             first_title_handle.set_text("t={}".format(t))
             second_image_handle.set_data(second_context_image)
@@ -85,14 +84,14 @@ def main():
         fig.canvas.mpl_connect('key_release_event', on_key_release)
         plt.show()
 
-        first_context_image = outputs['images'][0, t]
-        second_context_image = outputs['images'][0, t + 1]
+        first_context_image = images[0, t]
+        second_context_image = images[0, t + 1]
         context_states = outputs['states'][0, t:t + 2]
         actions = outputs['actions'][0, t:]
 
     else:
-        first_context_image = outputs['images'][0, args.time_idx]
-        second_context_image = outputs['images'][0, args.time_idx + 1]
+        first_context_image = images[0, args.time_idx]
+        second_context_image = images[0, args.time_idx + 1]
         context_states = outputs['states'][0, args.time_idx:args.time_idx + 2]
         actions = outputs['actions'][0, args.time_idx:]
 
