@@ -13,7 +13,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
-from video_prediction import datasets, models
+from video_prediction import models
+from video_prediction.datasets import dataset_utils
 from video_prediction.utils.ffmpeg_gif import save_gif
 
 
@@ -98,7 +99,7 @@ def main():
         print(k, "=", v)
     print('------------------------------------- End --------------------------------------')
 
-    VideoDataset = datasets.get_dataset_class(args.dataset)
+    VideoDataset = dataset_utils.get_dataset_class(args.dataset)
     dataset = VideoDataset(
         args.input_dir,
         mode=args.mode,

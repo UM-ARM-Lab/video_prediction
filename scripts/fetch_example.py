@@ -7,11 +7,11 @@ import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 
+from video_prediction.datasets import dataset_utils
+
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=FutureWarning)
     import tensorflow as tf
-
-from video_prediction import datasets
 
 
 def main():
@@ -38,7 +38,7 @@ def main():
 
     sess = tf.Session(config=config)
 
-    VideoDataset = datasets.get_dataset_class(args.dataset)
+    VideoDataset = dataset_utils.get_dataset_class(args.dataset)
     with open(args.dataset_hparams_dict, 'r') as hparams_f:
         hparams_dict = json.loads(hparams_f.read())
     dataset = VideoDataset(args.input_dir, mode="test", seed=0, num_epochs=1, hparams_dict=hparams_dict,

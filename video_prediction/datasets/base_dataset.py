@@ -143,7 +143,7 @@ class BaseVideoDataset(object):
         """
         raise NotImplementedError
 
-    def make_dataset(self, batch_size, shuffle=True):
+    def make_dataset(self, batch_size, use_batches=True, shuffle=True, num_parallel_calls=None):
         filenames = self.filenames
         if shuffle:
             shuffle = (self.mode == 'train') or (self.mode == 'val' and self.hparams.shuffle_on_val)
@@ -184,22 +184,34 @@ class BaseVideoDataset(object):
             example_sequence_length = self._max_sequence_length
             return self.slice_sequences(state_like_seqs, action_like_seqs, example_sequence_length)
 
-        num_parallel_calls = None
         if self.hparams.free_space_only:
-            dataset = dataset.map(
-                _parser).filter(
-                _filter_free_space_only).map(
-                _slice_sequences).map(
-                _flatten).batch(
-                batch_size, drop_remainder=True).prefetch(
-                batch_size)
+            if use_batches:
+                dataset = dataset.map(
+                    _parser, num_parallel_calls=num_parallel_calls).filter(
+                    _filter_free_space_only).map(
+                    _slice_sequences, num_parallel_calls=num_parallel_calls).map(
+                    _flatten, num_parallel_calls=num_parallel_calls).batch(
+                    batch_size, drop_remainder=True).prefetch(
+                    batch_size)
+            else:
+                dataset = dataset.map(
+                    _parser, num_parallel_calls=num_parallel_calls).filter(
+                    _filter_free_space_only).map(
+                    _slice_sequences, num_parallel_calls=num_parallel_calls).map(
+                    _flatten, num_parallel_calls=num_parallel_calls)
         else:
-            dataset = dataset.map(
-                _parser).map(
-                _slice_sequences).map(
-                _flatten).batch(
-                batch_size, drop_remainder=True).prefetch(
-                batch_size)
+            if use_batches:
+                dataset = dataset.map(
+                    _parser, num_parallel_calls=num_parallel_calls).map(
+                    _slice_sequences, num_parallel_calls=num_parallel_calls).map(
+                    _flatten, num_parallel_calls=num_parallel_calls).batch(
+                    batch_size, drop_remainder=True).prefetch(
+                    batch_size)
+            else:
+                dataset = dataset.map(
+                    _parser, num_parallel_calls=num_parallel_calls).map(
+                    _slice_sequences, num_parallel_calls=num_parallel_calls).map(
+                    _flatten, num_parallel_calls=num_parallel_calls)
         return dataset
 
     def make_batch(self, batch_size, shuffle=True):

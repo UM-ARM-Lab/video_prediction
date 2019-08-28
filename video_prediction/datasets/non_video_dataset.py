@@ -100,7 +100,7 @@ class NonVideoDataset(object):
                 parsed_hparams.parse(hparam)
         return parsed_hparams
 
-    def make_dataset(self, batch_size, shuffle=True):
+    def make_dataset(self, batch_size, use_batches=True, shuffle=True, num_parallel_calls=None):
         filenames = self.filenames
         if shuffle:
             random.shuffle(filenames)
@@ -122,19 +122,21 @@ class NonVideoDataset(object):
 
         def _sample_one_time_step(sequence):
             # -1 because we can't get the action at that last time step
-            idx = tf.random.uniform([], 0, self._max_sequence_length - 1, dtype=tf.int64)
+            idx = tf.random.uniform([], 0, self._max_sequence_length - 1, dtype=tf.int64, seed=1)
             step = {}
             with tf.name_scope("sample_one_time_step"):
                 for name, tensor in sequence.items():
                     step[name] = tensor[idx]
             return step
 
-        num_parallel_calls = None
         parsed_dataset = dataset.map(_parser, num_parallel_calls=num_parallel_calls)
         merged_dataset = parsed_dataset.map(_merge, num_parallel_calls=num_parallel_calls)
         one_time_step_dataset = merged_dataset.map(_sample_one_time_step, num_parallel_calls=num_parallel_calls)
-        batched_dataset = one_time_step_dataset.batch(batch_size, drop_remainder=True)
-        dataset = batched_dataset.prefetch(batch_size)
+        if use_batches:
+            batched_dataset = one_time_step_dataset.batch(batch_size, drop_remainder=True)
+            dataset = batched_dataset.prefetch(batch_size)
+        else:
+            dataset = one_time_step_dataset.prefetch(batch_size)
         return dataset
 
     def make_batch(self, batch_size, shuffle=True):

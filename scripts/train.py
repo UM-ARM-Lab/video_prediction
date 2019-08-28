@@ -15,9 +15,11 @@ import git
 import numpy as np
 import tensorflow as tf
 
+from video_prediction.datasets import dataset_utils
+
 tf.logging.set_verbosity(tf.logging.ERROR)
 
-from video_prediction import datasets, models
+from video_prediction import  models
 
 
 def add_tag_suffix(summary, tag_suffix):
@@ -140,7 +142,7 @@ def main():
         'fps': 2,
     }
 
-    VideoDataset = datasets.get_dataset_class(args.dataset)
+    VideoDataset = dataset_utils.get_dataset_class(args.dataset)
     train_dataset = VideoDataset(
         args.input_dir,
         mode='train',

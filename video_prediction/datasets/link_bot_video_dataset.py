@@ -34,6 +34,7 @@ class LinkBotVideoDataset(VideoDataset):
             else:
                 raise ValueError('The examples have images under more than one name.')
         self.state_like_names_and_shapes['images'] = '%%d/%s/encoded' % image_name, self.hparams.image_shape
+        self.state_like_names_and_shapes['rope_configurations'] = '%d/rope_configuration', (self.hparams.rope_config_dim,)
         if self.hparams.use_state:
             self.state_like_names_and_shapes['states'] = '%d/endeffector_pos', (2,)
             self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
@@ -49,6 +50,7 @@ class LinkBotVideoDataset(VideoDataset):
             time_shift=2,
             free_space_only=False,
             image_shape=[64, 64, 3],
+            rope_config_dim=6,
         )
         return dict(itertools.chain(default_hparams.items(), hparams.items()))
 
