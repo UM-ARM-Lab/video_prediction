@@ -3,6 +3,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import cv2
 import argparse
 import json
 import random
@@ -10,7 +11,6 @@ import random
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from skimage.transform import resize
 
 from video_prediction.datasets.dataset_utils import get_inputs
 from video_prediction.models import sna_model
@@ -67,7 +67,7 @@ def main():
 
     min_red = np.array([0.395, 0, 0])
     max_red = np.array([1.05, 0.05, 0.05])
-    min_gray = np.array([0.57, .57, .57])
+    min_gray = np.array([0.39, .39, .39])
     max_gray = np.array([1.05, 1.05, 1.05])
 
     sample_ind = 0
@@ -76,12 +76,17 @@ def main():
             break
         print("evaluation samples from %d to %d" % (sample_ind, sample_ind + args.batch_size))
         fetches = [model.outputs['gen_images'], inputs['sdf']]
-        gen_images_batch, sdf_batch = sess.run(fetches)
+        try:
+            gen_images_batch, sdf_batch = sess.run(fetches)
+        except tf.errors.OutOfRangeError:
+            break
         for gen_images_traj, sdf_traj in zip(gen_images_batch, sdf_batch):
             for t, (gen_image, sdf) in enumerate(zip(gen_images_traj, sdf_traj)):
                 obstacle_map = np.expand_dims(np.flipud(np.squeeze(sdf).T), axis=2)
-                obstacle_map = resize(obstacle_map, (gen_image.shape[0], gen_image.shape[1])) < 0
-                # check if any of the pixels in the obstacle map are green, or black, or yellow
+                obstacle_map = (cv2.resize(obstacle_map, (gen_image.shape[0], gen_image.shape[1])) < 0).astype(np.float32)
+                obstacle_map = cv2.erode(obstacle_map, kernel=np.ones((5, 5)), iterations=1)
+                obstacle_map = np.expand_dims(obstacle_map, axis=2)
+
                 masked_image = obstacle_map * gen_image
 
                 row, col = np.where(np.any(masked_image > 0, axis=2))
