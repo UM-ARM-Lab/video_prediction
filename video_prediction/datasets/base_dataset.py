@@ -377,6 +377,8 @@ class VideoDataset(BaseVideoDataset):
         features = dict()
         for example_name, (name, shape) in self.trajectory_constant_names_and_shapes.items():
             features[name] = tf.FixedLenFeature(shape, tf.float32)
+        for example_name, (name, shape) in self.trajectory_constant_names_and_shapes.items():
+            features[name] = tf.FixedLenFeature(shape, tf.float32)
         for i in range(self._max_sequence_length):
             for example_name, (name, shape) in self.state_like_names_and_shapes.items():
                 # FIXME: support loading of int64 features
@@ -399,6 +401,7 @@ class VideoDataset(BaseVideoDataset):
             for example_name, (name, shape) in self.trajectory_constant_names_and_shapes.items():
                 if example_name not in state_like_seqs:
                     state_like_seqs[example_name] = []
+                state_like_seqs[example_name].append(features[name])
         for i in range(self._max_sequence_length - 1):
             for example_name, (name, shape) in self.action_like_names_and_shapes.items():
                 action_like_seqs[example_name].append(features[name % i])

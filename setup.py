@@ -8,4 +8,4 @@ setup_args = generate_distutils_setup(
     packages=['video_prediction'],
     package_dir={'': '.'})
 
-setup(requires=['pillow', 'matplotlib', 'numpy', 'tensorflow'], **setup_args)
+setup(requires=['pillow', 'scikit-image', 'matplotlib', 'numpy', 'tensorflow'], **setup_args)
