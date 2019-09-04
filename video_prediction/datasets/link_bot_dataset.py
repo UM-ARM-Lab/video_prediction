@@ -35,6 +35,8 @@ class LinkBotDataset(NonVideoDataset):
         self.state_like_names_and_shapes['states'] = '%d/endeffector_pos', (2,)
         self.state_like_names_and_shapes['rope_configurations'] = '%d/rope_configuration', (self.hparams.rope_config_dim,)
         self.state_like_names_and_shapes['constraints'] = '%d/constraint', (1,)
+        self.state_like_names_and_shapes['velocity'] = '%d/1/velocity', (2,)
+        self.state_like_names_and_shapes['post_action_velocity'] = '%d/1/post_action_velocity', (2,)
         self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
         self.trajectory_constant_names_and_shapes['sdf'] = 'sdf/sdf', [self.hparams.sdf_shape[0], self.hparams.sdf_shape[1], 1]
         self.trajectory_constant_names_and_shapes['sdf_gradient'] = 'sdf/gradient', [self.hparams.sdf_shape[0],

@@ -37,9 +37,11 @@ class LinkBotVideoDataset(VideoDataset):
         self.state_like_names_and_shapes['rope_configurations'] = '%d/rope_configuration', (self.hparams.rope_config_dim,)
         if self.hparams.use_state:
             self.state_like_names_and_shapes['states'] = '%d/endeffector_pos', (2,)
-            self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
+        self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
         self.state_like_names_and_shapes['constraints'] = '%d/constraint', (1,)
         self.trajectory_constant_names_and_shapes['sdf'] = 'sdf/sdf', [self.hparams.sdf_shape[0], self.hparams.sdf_shape[1], 1]
+        self.trajectory_constant_names_and_shapes['sdf_resolution'] = 'sdf/resolution', (2,)
+        self.trajectory_constant_names_and_shapes['sdf_origin'] = 'sdf/origin', (2,)
         self._infer_seq_length_and_setup()
 
     def get_default_hparams_dict(self):

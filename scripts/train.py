@@ -19,7 +19,7 @@ from video_prediction.datasets import dataset_utils
 
 tf.logging.set_verbosity(tf.logging.ERROR)
 
-from video_prediction import  models
+from video_prediction import models
 
 
 def add_tag_suffix(summary, tag_suffix):
@@ -173,6 +173,7 @@ def main():
         'context_frames': train_dataset.hparams.context_frames,
         'sequence_length': train_dataset.hparams.sequence_length,
         'repeat': train_dataset.hparams.time_shift,
+        'dt': train_dataset.hparams.dt,
     })
     model = VideoPredictionModel(
         hparams_dict=hparams_dict,

@@ -157,3 +157,13 @@ def rollouts_from_results(results, context_length):
     image_sequence = np.concatenate((context_images, gen_images))
     pix_distrib_sequence = np.concatenate((context_pix_distribs, gen_pix_distribs))
     return pix_distrib_sequence, image_sequence
+
+
+def make_context_pix_distribs(context_length, image_h, image_w, source_pixels, inflate=0):
+    context_pix_distribs = np.zeros((context_length, image_h, image_w, 1), dtype=np.float32)
+    for i, source_pixel in enumerate(source_pixels):
+        for dr in range(-inflate, inflate + 1):
+            for dc in range(-inflate, inflate + 1):
+                if 0 <= source_pixel.row + dr < image_h and 0 <= source_pixel.col + dc < image_w:
+                    context_pix_distribs[i, source_pixel.row + dr, source_pixel.col + dc] = 1.0
+    return context_pix_distribs

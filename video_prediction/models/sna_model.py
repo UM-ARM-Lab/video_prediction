@@ -578,5 +578,6 @@ class SNAVideoPredictionModel(VideoPredictionModel):
             first_image_background=True,
             generate_scratch_image=True,
             schedule_sampling_k=900.0,
+            dt=None,
         )
         return dict(itertools.chain(default_hparams.items(), hparams.items()))

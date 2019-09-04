@@ -60,7 +60,8 @@ def get_inputs(dataset_directory: str,
                epochs: int,
                batch_size: int,
                seed: int,
-               balance_constraints_label: bool = False):
+               balance_constraints_label: bool = False,
+               shuffle: bool = True):
     dataset_hparams_dict = json.load(open(dataset_hparams_dict, 'r'))
     VideoDataset = get_dataset_class(dataset_class_name)
     my_dataset = VideoDataset(dataset_directory,
@@ -75,7 +76,7 @@ def get_inputs(dataset_directory: str,
         tf_dataset = balance_dataset(tf_dataset)
         tf_dataset = tf_dataset.batch(batch_size)
     else:
-        tf_dataset = my_dataset.make_dataset(batch_size)
+        tf_dataset = my_dataset.make_dataset(batch_size, shuffle=shuffle)
 
     iterator = tf_dataset.make_one_shot_iterator()
     handle = iterator.string_handle()

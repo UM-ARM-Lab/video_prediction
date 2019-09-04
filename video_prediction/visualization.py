@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-import argparse
 import os
 from typing import List
 
@@ -8,38 +6,14 @@ import numpy as np
 import tensorflow as tf
 from matplotlib.animation import FuncAnimation
 
+from link_bot_gazebo import gazebo_utils
+from link_bot_gazebo.srv import LinkBotStateRequest
 from video_prediction import load_data
-from video_prediction.model_for_planning import build_model, build_placeholders, build_feed_dict
-# noinspection PyUnresolvedReferences
-from visual_mpc import gui_tools
-# noinspection PyUnresolvedReferences
-from visual_mpc.numpy_point import NumpyPoint
+from video_prediction.model_for_planning import build_model, build_placeholders, build_feed_dict, make_context_pix_distribs
+from visual_mpc import gui_tools, sensor_image_to_float_image
 
 
-def main():
-    np.set_printoptions(suppress=True, linewidth=250, precision=4, threshold=64 * 64 * 3)
-    tf.logging.set_verbosity(tf.logging.FATAL)
-
-    context_length = 2
-    parser = argparse.ArgumentParser()
-    parser.add_argument("images", nargs=context_length, help='filename')
-    parser.add_argument("states", help='filename')
-    parser.add_argument("context_actions", help='filename')
-    parser.add_argument("actions", help='filename')
-    parser.add_argument("checkpoint", help="directory with checkpoint or checkpoint name (e.g. checkpoint_dir/model-200000)")
-    parser.add_argument("--outdir", help="ignored if output_gif_dir is specified")
-    parser.add_argument("--model", type=str, help="model class name", default='sna')
-    parser.add_argument("--model_hparams", type=str, help="a string of comma separated list of model hyperparameters")
-    parser.add_argument("--fps", type=int, default=1)
-    parser.add_argument("--show-combined-masks", type=str, default='', help='comma seperated list of integers from 0-9')
-    parser.add_argument("-t", type=int, default=0)
-    parser.add_argument("-s", type=int, default=64)
-    parser.add_argument("--seed", type=int, default=0)
-
-    args = parser.parse_args()
-
-    results, has_made_up = setup_and_run(args, context_length)
-
+def visualize_main(results, has_made_up, context_length, t, outdir, show_combined_masks):
     for k, v in results.items():
         print("{:40s}: {}".format(k, v.shape))
 
@@ -47,23 +21,23 @@ def main():
     # second index is the time step, in this case the last "context" time step
     # t=0 is the first generates image, and so the first context image would be t=-1
     # by writing t=n we are asking to visualize how image at t=n was generated
-    assert args.t >= 0
-    kernels = results['cdna_kernels'][0, args.t].squeeze()
-    masks = results['masks'][0, args.t].squeeze()
+    assert t >= 0
+    kernels = results['cdna_kernels'][0, t].squeeze()
+    masks = results['masks'][0, t].squeeze()
 
-    background_image = results['background_images'][0, args.t].squeeze()
-    images_transformed = results['transformed_images'][0, args.t].squeeze()
-    masked_images = results['masked_images'][0, args.t].squeeze()
-    images_fused = results['fused_images'][0, args.t].squeeze()
+    background_image = results['background_images'][0, t].squeeze()
+    images_transformed = results['transformed_images'][0, t].squeeze()
+    masked_images = results['masked_images'][0, t].squeeze()
+    images_fused = results['fused_images'][0, t].squeeze()
 
-    background_pix_distrib = results['background_pix_distribs'][0, args.t].squeeze()
-    transformed_pix_distribs = results['transformed_pix_distribs'][0, args.t].squeeze()
-    masked_pix_distribs = results['masked_pix_distribs'][0, args.t].squeeze()
-    pix_distribs_fused = results['fused_pix_distribs'][0, args.t].squeeze()
+    background_pix_distrib = results['background_pix_distribs'][0, t].squeeze()
+    transformed_pix_distribs = results['transformed_pix_distribs'][0, t].squeeze()
+    masked_pix_distribs = results['masked_pix_distribs'][0, t].squeeze()
+    pix_distribs_fused = results['fused_pix_distribs'][0, t].squeeze()
 
     if has_made_up:
-        made_up_image = results['made_up_images'][0, args.t].squeeze()
-        made_up_pix_distrib = results['made_up_pix_distribs'][0, args.t].squeeze()
+        made_up_image = results['made_up_images'][0, t].squeeze()
+        made_up_pix_distrib = results['made_up_pix_distribs'][0, t].squeeze()
     else:
         made_up_image = None
         made_up_pix_distrib = None
@@ -81,12 +55,12 @@ def main():
         made_up_masked_images = None
         made_up_pix_distrib_masked = None
 
-    if args.t < context_length:
-        prev_image = results['input_images'][0, args.t].squeeze()
-        prev_pix_distrib = results['input_pix_distribs'][0, args.t].squeeze()
+    if t < context_length:
+        prev_image = results['input_images'][0, t].squeeze()
+        prev_pix_distrib = results['input_pix_distribs'][0, t].squeeze()
     else:
-        prev_image = results['fused_images'][0, args.t - 1].squeeze()
-        prev_pix_distrib = results['fused_pix_distribs'][0, args.t - 1].squeeze()
+        prev_image = results['fused_images'][0, t - 1].squeeze()
+        prev_pix_distrib = results['fused_pix_distribs'][0, t - 1].squeeze()
 
     n_kernels = kernels.shape[0]
 
@@ -106,8 +80,8 @@ def main():
                    background_pix_distrib,
                    has_made_up)
 
-    if args.outdir:
-        plt.savefig(os.path.join(args.outdir, 'non_background_fig.png'))
+    if outdir:
+        plt.savefig(os.path.join(outdir, 'non_background_fig.png'))
 
     #######################################
     # CDNA Visualization on the real images
@@ -161,16 +135,16 @@ def main():
     ##########################
     # Show some masks combined
     ##########################
-    if args.show_combined_masks != '':
-        indeces = [int(i) for i in args.show_combined_masks.split(",")]
-        show_combined_masks(prev_image, masks, indeces)
+    if show_combined_masks != '':
+        indeces = [int(i) for i in show_combined_masks.split(",")]
+        combined_masks_viz(prev_image, masks, indeces, has_made_up)
 
     ###############
     # Show and save
     ###############
-    if args.outdir:
-        transformed_image_anim.save(os.path.join(args.outdir, 'transformed_image_figure.gif'), writer='imagemagick')
-        transformed_pix_distrib_anim.save(os.path.join(args.outdir, 'transformed_pix_distrib_figure.gif'), writer='imagemagick')
+    if outdir:
+        transformed_image_anim.save(os.path.join(outdir, 'transformed_image_figure.gif'), writer='imagemagick')
+        transformed_pix_distrib_anim.save(os.path.join(outdir, 'transformed_pix_distrib_figure.gif'), writer='imagemagick')
 
     plt.show()
 
@@ -416,9 +390,10 @@ def cdna_image_viz(kernels: np.ndarray,
     return transformed_image_anim
 
 
-def show_combined_masks(prev_image: np.ndarray,
-                        masks: np.ndarray,
-                        indeces: List[int]):
+def combined_masks_viz(prev_image: np.ndarray,
+                       masks: np.ndarray,
+                       indeces: List[int],
+                       has_made_up: bool):
     fig, axes = plt.subplots(nrows=3, ncols=int(masks.shape[0] / 2), gridspec_kw={'wspace': 0.1, 'hspace': 0.1})
     axes = axes.flatten()
     for ax in axes:
@@ -429,7 +404,12 @@ def show_combined_masks(prev_image: np.ndarray,
     # first image is background
     background_mask = masks[0]
 
-    for i, mask in enumerate(masks[1:]):
+    if has_made_up:
+        first_mask = 2
+    else:
+        first_mask = 1
+
+    for i, mask in enumerate(masks[first_mask:]):
         if i in indeces:
             axes[i].plot([0, 0, 63, 63, 0], [0, 63, 63, 0, 0], c='green', linewidth=4)
         axes[i].set_title("mask #{}".format(i))
@@ -439,7 +419,7 @@ def show_combined_masks(prev_image: np.ndarray,
     axes[i + 1].imshow(background_mask, cmap='gray', vmin=0, vmax=1)
 
     indeces = np.array(indeces)
-    shifted_indeces = indeces + 1
+    shifted_indeces = indeces + first_mask
     masks_to_combine = masks[shifted_indeces]
     combined_masks = np.sum(masks_to_combine, axis=0)
     combined_masks_3d = np.atleast_3d(combined_masks)
@@ -460,32 +440,57 @@ def show_combined_masks(prev_image: np.ndarray,
     axes[i + 5].set_title("other masks [image]")
 
 
-def setup_and_run(args, context_length):
-    context_states, context_images, context_actions, actions = load_data(args.images, args.states, args.context_actions,
-                                                                         args.actions)
+def setup_and_run_from_example_folder(example_dir_path, context_length, checkpoint, model, model_hparams):
+    images_file = [example_dir_path / '0.png', example_dir_path / '1.png']
+    states_file = example_dir_path / 'states.csv'
+    context_actions_file = example_dir_path / 'context_actions.csv'
+    actions_file = example_dir_path / 'actions.csv'
+    context_states, context_images, context_actions, actions = load_data(images_file, states_file, context_actions_file,
+                                                                         actions_file)
+    return setup_and_run(context_states, context_images, context_actions, actions, context_length, checkpoint, model,
+                         model_hparams)
 
+
+def setup_and_run_from_individual_files(images, states, context_actions, actions, context_length, checkpoint, model,
+                                        model_hparams):
+    context_states, context_images, context_actions, actions = load_data(images, states, context_actions, actions)
+    return setup_and_run(context_states, context_images, context_actions, actions, context_length, checkpoint, model,
+                         model_hparams)
+
+
+def setup_and_run_from_gazebo(actions_filename, context_length, checkpoint, model, model_hparams):
+    state_dim = 2
+    sna_model_action_dim = 2
+    services = gazebo_utils.GazeboServices()
+    context_images, context_states, context_actions = services.get_context(context_length, state_dim, sna_model_action_dim)
+
+    actions = np.atleast_2d(np.genfromtxt(actions_filename, delimiter=',', dtype=np.float32))
+
+    return setup_and_run(context_states, context_images, context_actions, actions, context_length, checkpoint, model,
+                         model_hparams)
+
+
+def setup_and_run(context_states, context_images, context_actions, actions, context_length, checkpoint, model, model_hparams):
     actions_length, action_dim = actions.shape
-    _, h, w, d = context_images.shape
+    _, image_h, image_w, image_d = context_images.shape
     _, state_dim = context_states.shape
 
-    placeholders, sequence_length = build_placeholders(context_length, actions_length, h, w, d, state_dim, action_dim)
+    placeholders, sequence_length = build_placeholders(context_length, actions_length, image_h, image_w, image_d, state_dim,
+                                                       action_dim)
 
-    model = build_model(args.checkpoint, args.model, args.model_hparams, placeholders, context_length, sequence_length)
+    model = build_model(checkpoint, model, model_hparams, placeholders, context_length, sequence_length)
 
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1)
     config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
     sess = tf.Session(config=config)
     sess.graph.as_default()
-    model.restore(sess, args.checkpoint)
+    model.restore(sess, checkpoint)
 
     source_pixel0 = gui_tools.get_source_pixel(context_images[0])
     source_pixel1 = gui_tools.get_source_pixel(context_images[1])
-    # source_pixel0 = NumpyPoint(46, 16)
-    # source_pixel1 = NumpyPoint(46, 16)
 
-    context_pix_distribs = np.zeros((context_length, args.s, args.s, 1), dtype=np.float32)
-    context_pix_distribs[0, source_pixel0.row, source_pixel0.col] = 1.0
-    context_pix_distribs[1, source_pixel1.row, source_pixel1.col] = 1.0
+    # FIXME: debugging!
+    context_pix_distribs = make_context_pix_distribs(context_length, image_h, image_w, [source_pixel0, source_pixel1])
 
     feed_dict = build_feed_dict(placeholders=placeholders,
                                 context_images=context_images,
@@ -519,7 +524,3 @@ def setup_and_run(args, context_length):
 
     results = sess.run(fetches, feed_dict=feed_dict)
     return results, model.hparams.generate_scratch_image
-
-
-if __name__ == '__main__':
-    main()

@@ -85,6 +85,9 @@ class NonVideoDataset(object):
         """
         hparams = dict(
             compression_type=None,
+            dt=0.1,
+            env_w=1.0,
+            env_h=1.0,
         )
         return hparams
 
