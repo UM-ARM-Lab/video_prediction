@@ -68,6 +68,7 @@ def main():
     parser.add_argument("--aggregate_nccl", type=int, default=0,
                         help="whether to use nccl or cpu for gradient aggregation in multi-gpu training")
     parser.add_argument("--gpu_mem_frac", type=float, default=1.0, help="fraction of gpu memory to use")
+    parser.add_argument("--num_gpus", type=int, default=1, help="number of gpus to use")
     parser.add_argument("--seed", type=int)
 
     args = parser.parse_args()
@@ -178,6 +179,7 @@ def main():
     model = VideoPredictionModel(
         hparams_dict=hparams_dict,
         hparams=args.model_hparams,
+        num_gpus=args.num_gpus,
         aggregate_nccl=args.aggregate_nccl)
 
     batch_size = model.hparams.batch_size
