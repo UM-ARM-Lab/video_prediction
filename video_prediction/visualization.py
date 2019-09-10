@@ -7,10 +7,9 @@ import tensorflow as tf
 from matplotlib.animation import FuncAnimation
 
 from link_bot_gazebo import gazebo_utils
-from link_bot_gazebo.srv import LinkBotStateRequest
-from video_prediction import load_data
+from video_prediction.datasets.dataset_utils import load_data
 from video_prediction.model_for_planning import build_model, build_placeholders, build_feed_dict, make_context_pix_distribs
-from visual_mpc import gui_tools, sensor_image_to_float_image
+from visual_mpc import gui_tools
 
 
 def visualize_main(results, has_made_up, context_length, t, outdir, show_combined_masks):
@@ -459,7 +458,7 @@ def setup_and_run_from_individual_files(images, states, context_actions, actions
 
 
 def setup_and_run_from_gazebo(actions_filename, context_length, checkpoint, model, model_hparams):
-    state_dim = 2
+    state_dim = 6
     sna_model_action_dim = 2
     services = gazebo_utils.GazeboServices()
     context_images, context_states, context_actions = services.get_context(context_length, state_dim, sna_model_action_dim)

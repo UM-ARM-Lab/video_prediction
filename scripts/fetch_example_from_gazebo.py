@@ -5,6 +5,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
+from link_bot_gazebo import gazebo_utils
 from link_bot_gazebo.gazebo_utils import GazeboServices
 from link_bot_gazebo.srv import LinkBotStateRequest
 
@@ -22,10 +23,10 @@ def main():
     state_req = LinkBotStateRequest()
     s = services.get_state(state_req)
     first_context_image = np.copy(np.frombuffer(s.camera_image.data, dtype=np.uint8)).reshape([64, 64, 3])
-    first_context_state = [s.points[-1].x, s.points[-1].y]
+    first_context_state = gazebo_utils.points_to_config(s.points)
     s = services.get_state(state_req)
     second_context_image = np.copy(np.frombuffer(s.camera_image.data, dtype=np.uint8)).reshape([64, 64, 3])
-    second_context_state = [s.points[-1].x, s.points[-1].y]
+    second_context_state = gazebo_utils.points_to_config(s.points)
     context_states = np.stack((first_context_state, second_context_state))
     context_actions = np.array([[s.gripper1_velocity.x, s.gripper1_velocity.y]])
 

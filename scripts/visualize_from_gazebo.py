@@ -18,8 +18,7 @@ def main():
     parser.add_argument("--outdir", help="ignored if output_gif_dir is specified")
     parser.add_argument("--model", type=str, help="model class name", default='sna')
     parser.add_argument("--model-hparams", type=str, help="a string of comma separated list of model hyperparameters")
-    parser.add_argument("--show-combined-masks", type=str, default='', help='comma seperated list of integers from 0-9')
-    parser.add_argument("-t", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=0)
 
     args = parser.parse_args()
 

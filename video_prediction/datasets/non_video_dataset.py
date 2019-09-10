@@ -110,9 +110,8 @@ class NonVideoDataset(object):
 
         dataset = tf.data.TFRecordDataset(filenames, buffer_size=8 * 1024 * 1024, compression_type=self.hparams.compression_type)
         if shuffle:
-            dataset = dataset.apply(tf.contrib.data.shuffle_and_repeat(buffer_size=1024, count=self.num_epochs))
-        else:
-            dataset = dataset.repeat(self.num_epochs)
+            dataset = dataset.shuffle(buffer_size=1024, seed=self.seed)
+        dataset = dataset.repeat(self.num_epochs)
 
         def _parser(serialized_example):
             state_like_seqs, action_like_seqs = self.parser(serialized_example)
@@ -125,21 +124,34 @@ class NonVideoDataset(object):
 
         def _sample_one_time_step(sequence):
             # -1 because we can't get the action at that last time step
-            idx = tf.random.uniform([], 0, self._max_sequence_length - 1, dtype=tf.int64, seed=1)
+            idx = tf.random.uniform([], 0, self._max_sequence_length - 1, dtype=tf.int64, seed=self.seed)
             step = {}
             with tf.name_scope("sample_one_time_step"):
                 for name, tensor in sequence.items():
                     step[name] = tensor[idx]
             return step
 
+        constraint_labels = ['constraints']
+
+        def _make_pairs(combined_dict):
+            inputs_dict = {}
+            labels_dict = {}
+            for k, v in combined_dict.items():
+                if k in constraint_labels:
+                    labels_dict[k] = v
+                else:
+                    inputs_dict[k] = v
+            return inputs_dict, labels_dict
+
         parsed_dataset = dataset.map(_parser, num_parallel_calls=num_parallel_calls)
         merged_dataset = parsed_dataset.map(_merge, num_parallel_calls=num_parallel_calls)
         one_time_step_dataset = merged_dataset.map(_sample_one_time_step, num_parallel_calls=num_parallel_calls)
+        pair_like_dataset = one_time_step_dataset.map(_make_pairs, num_parallel_calls=num_parallel_calls)
         if use_batches:
-            batched_dataset = one_time_step_dataset.batch(batch_size, drop_remainder=True)
+            batched_dataset = pair_like_dataset.batch(batch_size, drop_remainder=True)
             dataset = batched_dataset.prefetch(batch_size)
         else:
-            dataset = one_time_step_dataset.prefetch(batch_size)
+            dataset = pair_like_dataset.prefetch(batch_size)
         return dataset
 
     def make_batch(self, batch_size, shuffle=True):

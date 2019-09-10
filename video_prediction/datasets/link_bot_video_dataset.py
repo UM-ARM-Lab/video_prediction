@@ -35,10 +35,13 @@ class LinkBotVideoDataset(VideoDataset):
                 raise ValueError('The examples have images under more than one name.')
         self.state_like_names_and_shapes['images'] = '%%d/%s/encoded' % image_name, self.hparams.image_shape
         self.state_like_names_and_shapes['rope_configurations'] = '%d/rope_configuration', (self.hparams.rope_config_dim,)
-        if self.hparams.use_state:
-            self.state_like_names_and_shapes['states'] = '%d/endeffector_pos', (2,)
-        self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
         self.state_like_names_and_shapes['constraints'] = '%d/constraint', (1,)
+        self.state_like_names_and_shapes['velocity'] = '%d/1/velocity', (2,)
+        self.state_like_names_and_shapes['post_action_velocity'] = '%d/1/post_action_velocity', (2,)
+        if self.hparams.use_state:
+            # self.state_like_names_and_shapes['states'] = '%d/endeffector_pos', (2,)
+            self.state_like_names_and_shapes['states'] = '%d/rope_configuration', (self.hparams.rope_config_dim,)
+        self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
         self.trajectory_constant_names_and_shapes['sdf'] = 'sdf/sdf', [self.hparams.sdf_shape[0], self.hparams.sdf_shape[1], 1]
         self.trajectory_constant_names_and_shapes['sdf_resolution'] = 'sdf/resolution', (2,)
         self.trajectory_constant_names_and_shapes['sdf_origin'] = 'sdf/origin', (2,)
