@@ -67,7 +67,7 @@ def main():
 
     parser.add_argument("--aggregate_nccl", type=int, default=0,
                         help="whether to use nccl or cpu for gradient aggregation in multi-gpu training")
-    parser.add_argument("--gpu_mem_frac", type=float, default=0, help="fraction of gpu memory to use")
+    parser.add_argument("--gpu_mem_frac", type=float, default=1.0, help="fraction of gpu memory to use")
     parser.add_argument("--seed", type=int)
 
     args = parser.parse_args()
