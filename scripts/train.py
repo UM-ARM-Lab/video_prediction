@@ -15,7 +15,7 @@ import git
 import numpy as np
 import tensorflow as tf
 
-from video_prediction.datasets import dataset_utils
+from video_prediction.datasets import get_dataset_class
 
 tf.logging.set_verbosity(tf.logging.ERROR)
 
@@ -142,7 +142,7 @@ def main():
         'fps': 2,
     }
 
-    VideoDataset = dataset_utils.get_dataset_class(args.dataset)
+    VideoDataset = get_dataset_class(args.dataset)
     train_dataset = VideoDataset(
         args.input_dir,
         mode='train',
