@@ -29,6 +29,18 @@ def setup_and_rollout_from_gazebo(actions_filename, context_length, checkpoint, 
                              model_hparams)
 
 
+def setup_and_rollout_from_example_dir(example_dir_path, actions_file, context_length, checkpoint, model, model_hparams):
+    images_file = [example_dir_path / '0.png', example_dir_path / '1.png']
+    states_file = example_dir_path / 'states.csv'
+    context_actions_file = example_dir_path / 'context_actions.csv'
+    context_states, context_images, context_actions, actions = load_data(images_file,
+                                                                         states_file,
+                                                                         context_actions_file,
+                                                                         actions_file)
+    return setup_and_rollout(context_images, context_states, context_actions, actions, context_length, checkpoint, model,
+                             model_hparams)
+
+
 def setup_and_rollout_from_individual_files(images, states, context_actions, actions, context_length, checkpoint, model,
                                             model_hparams):
     context_states, context_images, context_actions, actions = load_data(images, states, context_actions, actions)

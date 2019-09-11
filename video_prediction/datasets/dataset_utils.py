@@ -1,5 +1,5 @@
 import json
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 
 import numpy as np
 import tensorflow as tf
@@ -90,7 +90,7 @@ def get_inputs(dataset_directory: str,
     return my_dataset, inputs, steps_per_epoch
 
 
-def load_data(context_image_filenames: str,
+def load_data(context_image_filenames: List[str],
               context_states_filename: str,
               context_actions_filename: str,
               actions_filename: Optional[str] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Optional[np.ndarray]]:

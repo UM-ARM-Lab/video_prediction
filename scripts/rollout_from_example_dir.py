@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 import argparse
+import pathlib
 
 import numpy as np
 import tensorflow as tf
 
-from video_prediction.rollout_utils import rollout_main, setup_and_rollout_from_gazebo
+from video_prediction.rollout_utils import setup_and_rollout_from_individual_files, rollout_main, setup_and_rollout_from_gazebo
 
 
 def main():
@@ -12,13 +13,13 @@ def main():
     tf.logging.set_verbosity(tf.logging.FATAL)
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("example_dir_path", type=pathlib.Path)
     parser.add_argument("actions", help='filename')
     parser.add_argument("checkpoint", help="directory with checkpoint or checkpoint name (e.g. checkpoint_dir/model-200000)")
     parser.add_argument("--outdir", help="ignored if output_gif_dir is specified")
     parser.add_argument("--model", type=str, help="model class name", default='sna')
     parser.add_argument("--model-hparams", type=str, help="a string of comma separated list of model hyperparameters")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--fps", type=float, default=4)
 
     args = parser.parse_args()
 
