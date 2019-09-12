@@ -11,15 +11,15 @@ import os
 import random
 import re
 
-import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
 from video_prediction import models
-from video_prediction.datasets import dataset_utils
+from video_prediction.datasets import get_dataset_class
 
 
 def save_image_sequence(prefix_fname, images, time_start_ind=0):
+    import matplotlib.pyplot as plt
     head, tail = os.path.split(prefix_fname)
     if head and not os.path.exists(head):
         os.makedirs(head)
@@ -213,7 +213,7 @@ def main():
         print(k, "=", v)
     print('------------------------------------- End --------------------------------------')
 
-    VideoDataset = dataset_utils.get_dataset_class(args.dataset)
+    VideoDataset = get_dataset_class(args.dataset)
     dataset = VideoDataset(
         args.input_dir,
         mode=args.mode,
@@ -266,6 +266,7 @@ def main():
     sess.graph.as_default()
 
     model.restore(sess, args.checkpoint)
+    return
 
     sample_ind = 0
     while True:
