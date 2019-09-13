@@ -5,6 +5,8 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image
 
+from video_prediction.datasets import get_dataset_class
+
 
 def flatten_concat_pairs(ex_pos, ex_neg):
     flat_pair = tf.data.Dataset.from_tensors(ex_pos).concatenate(tf.data.Dataset.from_tensors(ex_neg))

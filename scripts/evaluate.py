@@ -266,7 +266,6 @@ def main():
     sess.graph.as_default()
 
     model.restore(sess, args.checkpoint)
-    return
 
     sample_ind = 0
     while True:
@@ -277,6 +276,7 @@ def main():
         except tf.errors.OutOfRangeError:
             break
         print("evaluation samples from %d to %d" % (sample_ind, sample_ind + args.batch_size))
+        return
 
         feed_dict = {input_ph: input_results[name] for name, input_ph in input_phs.items()}
         # compute "best" metrics using the computation graph

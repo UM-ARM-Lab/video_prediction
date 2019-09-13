@@ -5,12 +5,12 @@ import re
 import tensorflow as tf
 from google.protobuf.json_format import MessageToDict
 
-from .video_dataset import VideoDataset
+from .state_space_dataset import StateSpaceDataset
 
 
-class LinkBotVideoDataset(VideoDataset):
+class LinkBotStateSpaceDataset(StateSpaceDataset):
     def __init__(self, *args, **kwargs):
-        super(LinkBotVideoDataset, self).__init__(*args, **kwargs)
+        super(LinkBotStateSpaceDataset, self).__init__(*args, **kwargs)
 
         # infer name of image feature
         options = tf.python_io.TFRecordOptions(compression_type=self.hparams.compression_type)
@@ -22,51 +22,29 @@ class LinkBotVideoDataset(VideoDataset):
             m = re.search('\d+/(\w+)/encoded', name)
             if m:
                 image_names.add(m.group(1))
-        # look for image_aux1 and image_view0 in that order of priority
-        image_name = None
-        for name in ['image_aux1', 'image_view0']:
-            if name in image_names:
-                image_name = name
-                break
-        if not image_name:
-            if len(image_names) == 1:
-                image_name = image_names.pop()
-            else:
-                raise ValueError('The examples have images under more than one name.')
-        self.state_like_names_and_shapes['images'] = '%%d/%s/encoded' % image_name, self.hparams.image_shape
-        self.state_like_names_and_shapes['rope_configurations'] = '%d/rope_configuration', (self.hparams.rope_config_dim,)
+
+        self.state_like_names_and_shapes['states'] = '%d/rope_configuration', (self.hparams.rope_config_dim,)
+        self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
         self.state_like_names_and_shapes['constraints'] = '%d/constraint', (1,)
         self.state_like_names_and_shapes['velocity'] = '%d/1/velocity', (2,)
         self.state_like_names_and_shapes['post_action_velocity'] = '%d/1/post_action_velocity', (2,)
-        if self.hparams.use_state:
-            self.state_like_names_and_shapes['states'] = '%d/endeffector_pos', (2,)
-            # self.state_like_names_and_shapes['states'] = '%d/rope_configuration', (self.hparams.rope_config_dim,)
-        self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
         self.trajectory_constant_names_and_shapes['sdf'] = 'sdf/sdf', [self.hparams.sdf_shape[0], self.hparams.sdf_shape[1], 1]
         self.trajectory_constant_names_and_shapes['sdf_resolution'] = 'sdf/resolution', (2,)
         self.trajectory_constant_names_and_shapes['sdf_origin'] = 'sdf/origin', (2,)
         self._infer_seq_length_and_setup()
 
     def get_default_hparams_dict(self):
-        default_hparams = super(LinkBotVideoDataset, self).get_default_hparams_dict()
+        default_hparams = super(LinkBotStateSpaceDataset, self).get_default_hparams_dict()
         hparams = dict(
-            context_frames=2,
             sequence_length=12,
-            long_sequence_length=30,
-            time_shift=2,
             free_space_only=False,
-            image_shape=[64, 64, 3],
             sdf_shape=[101, 101],
             rope_config_dim=6,
         )
         return dict(itertools.chain(default_hparams.items(), hparams.items()))
 
-    @property
-    def jpeg_encoding(self):
-        return False
-
     def parser(self, serialized_example):
-        state_like_seqs, action_like_seqs = super(LinkBotVideoDataset, self).parser(serialized_example)
+        state_like_seqs, action_like_seqs = super(LinkBotStateSpaceDataset, self).parser(serialized_example)
         return state_like_seqs, action_like_seqs
 
     def num_examples_per_epoch(self):

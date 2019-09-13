@@ -1,6 +1,6 @@
 import itertools
 
-from .base_dataset import VideoDataset
+from .video_dataset import VideoDataset
 from .softmotion_dataset import SoftmotionVideoDataset
 
 

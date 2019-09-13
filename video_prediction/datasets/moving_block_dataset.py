@@ -5,7 +5,7 @@ import re
 import tensorflow as tf
 
 from video_prediction.utils import tf_utils
-from .base_dataset import VideoDataset
+from .video_dataset import VideoDataset
 
 
 class MovingBlockDataset(VideoDataset):

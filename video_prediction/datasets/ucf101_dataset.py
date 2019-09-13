@@ -9,7 +9,7 @@ from multiprocessing import Pool
 import cv2
 import tensorflow as tf
 
-from video_prediction.datasets.base_dataset import VarLenFeatureVideoDataset
+from video_prediction.datasets.video_dataset import VarLenFeatureVideoDataset
 
 
 class UCF101VideoDataset(VarLenFeatureVideoDataset):

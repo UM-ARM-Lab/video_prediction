@@ -149,7 +149,7 @@ class Prediction_Model(object):
             # Calculate number of ground-truth frames to pass in.
             # Inverse sigmoid decay
             num_ground_truth = tf.to_int32(
-                tf.round(tf.to_float(batch_size) * (self.k / (self.k + tf.exp(self.iter_num / self.k)))))
+                tf.round(tf.cast(batch_size, dtype=tf.float32) * (self.k / (self.k + tf.exp(self.iter_num / self.k)))))
             no_scheduled_sampling = False
 
         # LSTM state sizes and states.

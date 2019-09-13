@@ -1,5 +1,5 @@
-from .base_dataset import BaseVideoDataset
-from .base_dataset import VideoDataset
+from .video_dataset import BaseVideoDataset
+from .video_dataset import VideoDataset
 from .google_robot_dataset import GoogleRobotVideoDataset
 from .link_bot_dataset import LinkBotDataset
 from .link_bot_video_dataset import LinkBotVideoDataset
@@ -7,6 +7,9 @@ from .moving_block_dataset import MovingBlockDataset
 from .softmotion_dataset import SoftmotionVideoDataset
 from .sv2p_dataset import SV2PVideoDataset
 from .unity_cloth_dataset import UnityClothDataset
+from .state_space_dataset import StateSpaceDataset
+from .link_bot_state_space_dataset import LinkBotStateSpaceDataset
+
 
 def get_dataset_class(dataset):
     dataset_mappings = {
@@ -18,6 +21,7 @@ def get_dataset_class(dataset):
         'unity_cloth': 'UnityClothDataset',
         'link_bot_video': 'LinkBotVideoDataset',
         'link_bot': 'LinkBotDataset',
+        'state_space': 'LinkBotStateSpaceDataset',
     }
     dataset_class = dataset_mappings.get(dataset, dataset)
     dataset_class = globals().get(dataset_class)

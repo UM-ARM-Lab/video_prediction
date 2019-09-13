@@ -5,7 +5,7 @@ import pathlib
 import numpy as np
 import tensorflow as tf
 
-from video_prediction.rollout_utils import setup_and_rollout_from_individual_files, rollout_main, setup_and_rollout_from_gazebo
+from video_prediction.rollout_utils import rollout_main, setup_and_rollout_from_example_dir
 
 
 def main():
@@ -20,11 +20,17 @@ def main():
     parser.add_argument("--model", type=str, help="model class name", default='sna')
     parser.add_argument("--model-hparams", type=str, help="a string of comma separated list of model hyperparameters")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--fps", type=int, default=4)
 
     args = parser.parse_args()
 
     context_length = 2
-    results = setup_and_rollout_from_gazebo(args.actions, context_length, args.checkpoint, args.model, args.model_hparams)
+    results = setup_and_rollout_from_example_dir(args.example_dir_path,
+                                                 args.actions,
+                                                 context_length,
+                                                 args.checkpoint,
+                                                 args.model,
+                                                 args.model_hparams)
     rollout_main(*results, args.outdir, args.fps)
 
 
