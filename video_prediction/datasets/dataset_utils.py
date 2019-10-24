@@ -1,5 +1,5 @@
 import json
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Union
 
 import numpy as np
 import tensorflow as tf
@@ -27,7 +27,7 @@ def balance_dataset(dataset):
 
 def get_dataset(dataset_directory: str,
                 dataset_class_name: str,
-                dataset_hparams_dict: str,
+                dataset_hparams_dict: Union[str, dict],
                 dataset_hparams: str,
                 mode: str,
                 epochs: Optional[int],
@@ -35,7 +35,9 @@ def get_dataset(dataset_directory: str,
                 seed: int,
                 balance_constraints_label: bool = False,
                 shuffle: bool = True):
-    dataset_hparams_dict = json.load(open(dataset_hparams_dict, 'r'))
+    if isinstance(dataset_hparams_dict, str):
+        dataset_hparams_dict = json.load(open(dataset_hparams_dict, 'r'))
+
     dataset_class = get_dataset_class(dataset_class_name)
     my_dataset = dataset_class(dataset_directory,
                                mode=mode,
@@ -68,9 +70,9 @@ def get_iterators(dataset_directory: str,
                                          epochs, batch_size, seed, balance_constraints_label, shuffle)
 
     iterator = tf_dataset.make_one_shot_iterator()
-    handle = iterator.string_handle()
-    iterator = tf.data.Iterator.from_string_handle(handle, tf_dataset.output_types,
-                                                   tf_dataset.output_shapes)
+    # handle = iterator.string_handle()
+    # iterator = tf.data.Iterator.from_string_handle(handle, tf_dataset.output_types,
+    #                                                tf_dataset.output_shapes)
     steps_per_epoch = int(my_dataset.num_examples_per_epoch() / batch_size)
     return my_dataset, iterator, steps_per_epoch
 

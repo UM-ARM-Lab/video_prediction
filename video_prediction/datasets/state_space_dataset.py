@@ -88,6 +88,8 @@ class BaseStateSpaceDataset(object):
             dt=0.1,
             env_w=1.0,
             env_h=1.0,
+            sdf_w=1.0,
+            sdf_h=1.0,
         )
         return hparams
 
@@ -155,7 +157,10 @@ class BaseStateSpaceDataset(object):
             return is_valid
 
         def _reorganize_dict(state_like_sliced_seqs, action_like_sliced_seqs):
-            input_dict = state_like_sliced_seqs
+            input_dict = {}
+            for k, v in state_like_sliced_seqs.items():
+                # chop off the last time step since that's not part of the input
+                input_dict[k] = v[:-1]
             output_dict = {'output_states': state_like_sliced_seqs['states']}
             input_dict.update(action_like_sliced_seqs)
             return input_dict, output_dict
@@ -216,8 +221,8 @@ class BaseStateSpaceDataset(object):
         else:
             t_start = 0
 
-        state_like_t_slice = slice(t_start, t_start + (sequence_length - 1) + 1, 1)
-        action_like_t_slice = slice(t_start, t_start + (sequence_length - 1))
+        state_like_t_slice = slice(t_start, t_start + sequence_length, 1)
+        action_like_t_slice = slice(t_start, t_start + sequence_length - 1)
 
         state_like_sliced_seqs = OrderedDict()
         action_like_sliced_seqs = OrderedDict()
@@ -280,6 +285,7 @@ class StateSpaceDataset(BaseStateSpaceDataset):
             features[name] = tf.FixedLenFeature(shape, tf.float32)
         for example_name, (name, shape) in self.trajectory_constant_names_and_shapes.items():
             features[name] = tf.FixedLenFeature(shape, tf.float32)
+
         for i in range(self._max_sequence_length):
             for example_name, (name, shape) in self.state_like_names_and_shapes.items():
                 # FIXME: support loading of int64 features

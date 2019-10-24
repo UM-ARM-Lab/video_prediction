@@ -15,7 +15,7 @@ import tensorflow as tf
 
 from video_prediction import models
 from video_prediction.datasets import dataset_utils
-from video_prediction.utils.ffmpeg_gif import save_gif
+from moonshine.ffmpeg_gif import save_gif
 
 
 def main():

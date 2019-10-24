@@ -2,9 +2,6 @@ import itertools
 import os
 import re
 
-import tensorflow as tf
-from google.protobuf.json_format import MessageToDict
-
 from .state_space_dataset import StateSpaceDataset
 
 
@@ -12,23 +9,12 @@ class LinkBotStateSpaceDataset(StateSpaceDataset):
     def __init__(self, *args, **kwargs):
         super(LinkBotStateSpaceDataset, self).__init__(*args, **kwargs)
 
-        # infer name of image feature
-        options = tf.python_io.TFRecordOptions(compression_type=self.hparams.compression_type)
-        example = next(tf.python_io.tf_record_iterator(self.filenames[0], options=options))
-        dict_message = MessageToDict(tf.train.Example.FromString(example))
-        feature = dict_message['features']['feature']
-        image_names = set()
-        for name in feature.keys():
-            m = re.search('\d+/(\w+)/encoded', name)
-            if m:
-                image_names.add(m.group(1))
-
         self.state_like_names_and_shapes['states'] = '%d/rope_configuration', (self.hparams.rope_config_dim,)
         self.action_like_names_and_shapes['actions'] = '%d/action', (2,)
         self.state_like_names_and_shapes['constraints'] = '%d/constraint', (1,)
         self.state_like_names_and_shapes['velocity'] = '%d/1/velocity', (2,)
         self.state_like_names_and_shapes['post_action_velocity'] = '%d/1/post_action_velocity', (2,)
-        self.trajectory_constant_names_and_shapes['sdf'] = 'sdf/sdf', [self.hparams.sdf_shape[0], self.hparams.sdf_shape[1], 1]
+        # self.trajectory_constant_names_and_shapes['sdf'] = 'sdf/sdf', [self.hparams.sdf_shape[0], self.hparams.sdf_shape[1], 1]
         self.trajectory_constant_names_and_shapes['sdf_resolution'] = 'sdf/resolution', (2,)
         self.trajectory_constant_names_and_shapes['sdf_origin'] = 'sdf/origin', (2,)
         self._infer_seq_length_and_setup()

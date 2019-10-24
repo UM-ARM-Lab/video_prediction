@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 
 from video_prediction.utils import html
-from video_prediction.utils.ffmpeg_gif import save_gif as ffmpeg_save_gif
+from moonshine.ffmpeg_gif import save_gif as ffmpeg_save_gif
 
 
 def load_metrics(prefix_fname):
