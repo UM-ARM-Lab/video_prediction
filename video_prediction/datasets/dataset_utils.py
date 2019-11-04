@@ -2,27 +2,10 @@ import json
 from typing import Tuple, Optional, List, Union
 
 import numpy as np
-import tensorflow as tf
 from PIL import Image
 
+from link_bot_data.link_bot_dataset_utils import balance_xy_dataset
 from video_prediction.datasets import get_dataset_class
-
-
-def flatten_concat_pairs(ex_pos, ex_neg):
-    flat_pair = tf.data.Dataset.from_tensors(ex_pos).concatenate(tf.data.Dataset.from_tensors(ex_neg))
-    return flat_pair
-
-
-def balance_dataset(dataset):
-    """
-    :param dataset: assumes each element is of the structure (inputs_dict_of_tensors, outputs_dict_of_tensors)
-    """
-    positive_examples = dataset.filter(lambda x, y: tf.squeeze(tf.equal(y['constraints'], 1)))
-    negative_examples = dataset.filter(lambda x, y: tf.squeeze(tf.equal(y['constraints'], 0)))
-    # zipping takes the shorter of the two, hence why this makes it balanced
-    balanced_dataset = tf.data.Dataset.zip((positive_examples, negative_examples))
-    balanced_dataset = balanced_dataset.flat_map(flatten_concat_pairs)
-    return balanced_dataset
 
 
 def get_dataset(dataset_directory: str,
@@ -33,7 +16,7 @@ def get_dataset(dataset_directory: str,
                 epochs: Optional[int],
                 batch_size: int,
                 seed: int,
-                balance_constraints_label: bool = False,
+                balance_key: Optional[str] = None,
                 shuffle: bool = True):
     if isinstance(dataset_hparams_dict, str):
         dataset_hparams_dict = json.load(open(dataset_hparams_dict, 'r'))
@@ -46,9 +29,9 @@ def get_dataset(dataset_directory: str,
                                hparams_dict=dataset_hparams_dict,
                                hparams=dataset_hparams)
 
-    if balance_constraints_label:
+    if balance_key is not None:
         tf_dataset = my_dataset.make_dataset(batch_size=batch_size, use_batches=False)
-        tf_dataset = balance_dataset(tf_dataset)
+        tf_dataset = balance_xy_dataset(tf_dataset, balance_key)
         tf_dataset = tf_dataset.batch(batch_size)
     else:
         tf_dataset = my_dataset.make_dataset(batch_size, shuffle=shuffle)
@@ -64,10 +47,10 @@ def get_iterators(dataset_directory: str,
                   epochs: Optional[int],
                   batch_size: int,
                   seed: int,
-                  balance_constraints_label: bool = False,
+                  balance_key: Optional[str] = None,
                   shuffle: bool = True):
     my_dataset, tf_dataset = get_dataset(dataset_directory, dataset_class_name, dataset_hparams_dict, dataset_hparams, mode,
-                                         epochs, batch_size, seed, balance_constraints_label, shuffle)
+                                         epochs, batch_size, seed, balance_key, shuffle)
 
     iterator = tf_dataset.make_one_shot_iterator()
     # handle = iterator.string_handle()
@@ -85,11 +68,11 @@ def get_inputs(dataset_directory: str,
                epochs: Optional[int],
                batch_size: int,
                seed: int,
-               balance_constraints_label: bool = False,
+               balance_key: Optional[str] = None,
                shuffle: bool = True):
     my_dataset, iterator, steps_per_epoch = get_iterators(dataset_directory, dataset_class_name, dataset_hparams_dict,
                                                           dataset_hparams, mode, epochs, batch_size, seed,
-                                                          balance_constraints_label, shuffle)
+                                                          balance_key, shuffle)
     inputs = iterator.get_next()
     return my_dataset, inputs, steps_per_epoch
 
