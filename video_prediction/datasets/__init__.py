@@ -16,9 +16,6 @@ def get_dataset_class(dataset):
         'bair': 'SoftmotionVideoDataset',  # alias of softmotion
         'moving_block': 'MovingBlockDataset',
         'unity_cloth': 'UnityClothDataset',
-        'link_bot_video': 'LinkBotVideoDataset',
-        'link_bot': 'LinkBotDataset',
-        'state_space': 'LinkBotStateSpaceDataset',
     }
     dataset_class = dataset_mappings.get(dataset, dataset)
     dataset_class = globals().get(dataset_class)
